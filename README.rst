@@ -1,9 +1,10 @@
 A command line client for kong admin API
 ========================================
 
-A simple example how this tool ease kong api management:
+This tool ease kong management like getting routes for service name (not id):
 
 .. code-block:: bash
+
     kongctl -s https://localhost:8001 list routes -s example-service
 
     1ba43640-6977-4d6a-9804-6e0032d77bb1: example-service
