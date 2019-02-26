@@ -50,7 +50,8 @@ class JsonOutputFormatter(object):
         self._write(self.indent_spacer(indent))
         self._write(" ".join(data) + '\n')
 
-    def print_pair(self, k, data):
+    def print_pair(self, k, data, indent=0):
+        self._write(self.indent_spacer(indent))
         self._write(k, 'blue')
         self._write(': ')
         self._write(data)

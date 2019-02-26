@@ -54,5 +54,7 @@ TODO
  - Get stubs for create operation
  - Support update from cmd args
  - Support yaml
+ - Sort by id?
+ - list command filter option
  - Autocomplete
  - Add images instead of code in README (to show color support)
