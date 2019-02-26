@@ -13,10 +13,10 @@ all: test
 
 init: uninstall-kongctl
 	@echo $(TAG)Installing dev requirements$(END)
-	pip install --upgrade -r $(REQUIREMENTS)
+	pip3 install --upgrade -r $(REQUIREMENTS)
 
 	@echo $(TAG)Installing kongctl$(END)
-	pip install --upgrade --editable .
+	pip3 install --upgrade --editable .
 
 	@echo
 
@@ -59,7 +59,7 @@ test-dist: test-sdist test-bdist-wheel
 test-sdist: clean uninstall-kongctl
 	@echo $(TAG)Testing sdist build an installation$(END)
 	python setup.py sdist
-	pip install --force-reinstall --upgrade dist/*.gz
+	pip3 install --force-reinstall --upgrade dist/*.gz
 	which kongctl
 	@echo
 
@@ -67,19 +67,19 @@ test-sdist: clean uninstall-kongctl
 test-bdist-wheel: clean uninstall-kongctl
 	@echo $(TAG)Testing wheel build an installation$(END)
 	python setup.py bdist_wheel
-	pip install --force-reinstall --upgrade dist/*.whl
+	pip3 install --force-reinstall --upgrade dist/*.whl
 	which kongctl
 	@echo
 
 
 pycodestyle:
-	which pycodestyle || pip install pycodestyle
+	which pycodestyle || pip3 install pycodestyle
 	pycodestyle
 	@echo
 
 
 coveralls:
-	which coveralls || pip install python-coveralls
+	which coveralls || pip3 install python-coveralls
 	coveralls
 	@echo
 
