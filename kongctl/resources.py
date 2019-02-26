@@ -193,7 +193,7 @@ class PluginResource(BaseResource):
 
     def short_formatter(self, resource):
         service_name = '*all*'
-        route_name = '*all*'
+        route_res = None
         if resource.get('service_id'):
             ref = ServiceResource(self.http_client, self.formatter)
             service_name = ref.get_by_id(resource['service_id'])['name']
@@ -204,8 +204,12 @@ class PluginResource(BaseResource):
 
         self.formatter.print_header("{}: {} (service {})".format(resource['id'], resource['name'], service_name))
         self.formatter.print_pair('Service', service_name, indent=1)
-        self.formatter.print_pair('Route', '', indent=1)
-        route_ref.short_formatter(route_res, indent=2)
+
+        if route_res:
+            self.formatter.print_pair('Route', '', indent=1)
+            route_ref.short_formatter(route_res, indent=2)
+        else:
+            self.formatter.print_pair('Route', '*all*', indent=1)
 
     def id_getter(self, resource_name):
         r = self.http_client.get('/{}/{}'.format("plugins", resource_name))

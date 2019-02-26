@@ -2,7 +2,7 @@
 """
 kongcl - a CLI for kong admin interface.
 """
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 __author__ = 'Alexander Nevskiy'
 __licence__ = 'BSD'
 
