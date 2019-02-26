@@ -73,13 +73,13 @@ test-bdist-wheel: clean uninstall-kongctl
 
 
 pycodestyle:
-	which pycodestyle || pip3 install pycodestyle
+	which pycodestyle || pip install pycodestyle
 	pycodestyle
 	@echo
 
 
 coveralls:
-	which coveralls || pip3 install python-coveralls
+	which coveralls || pip install python-coveralls
 	coveralls
 	@echo
 
@@ -96,9 +96,7 @@ publish-no-test:
 	@echo $(TAG)Testing wheel build an installation$(END)
 	@echo "$(VERSION)"
 	@echo "$(VERSION)" | grep -q "dev" && echo '!!!Not publishing dev version!!!' && exit 1 || echo ok
-	python setup.py register
-	python setup.py sdist upload
-	python setup.py bdist_wheel upload
+	twine upload dist/*
 	@echo
 
 

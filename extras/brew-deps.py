@@ -13,7 +13,7 @@ import requests
 
 
 PACKAGES = [
-    ('kongctl', 'https://test.pypi.org/pypi/{}/json'),
+    ('kongctl', 'https://pypi.org/pypi/{}/json'),
     ('requests', 'https://pypi.org/pypi/{}/json'),
     ('certifi', 'https://pypi.org/pypi/{}/json'),
     ('termcolor', 'https://pypi.org/pypi/{}/json'),
