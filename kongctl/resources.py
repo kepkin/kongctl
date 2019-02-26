@@ -94,6 +94,8 @@ class ServiceResource(BaseResource):
 
     def short_formatter(self, resource):
         self.formatter.print_pair(resource['id'], resource['name'])
+        self.formatter.println("{}{}".format(resource['host'], resource['path'] or ''), indent=1)
+        self.formatter.println()
 
     def id_getter(self, resource_name):
         r = self.http_client.get('/{}/{}'.format("services", resource_name))
@@ -126,7 +128,7 @@ class RouteResource(BaseResource):
         super().__init__(http_client, formatter, 'routes')
 
     def short_formatter(self, resource):
-        hosts = resource['hosts'] or []
+        hosts = resource['hosts'] or ['*']
         paths = resource['paths'] or ['/']
 
         ref = ServiceResource(self.http_client, self.formatter)

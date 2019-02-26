@@ -2,6 +2,7 @@
 from .json_formatter import JsonOutputFormatter
 from .client import HttpClient
 from .resources import *
+from . import __version__
 
 import argparse
 import sys
@@ -9,19 +10,24 @@ import sys
 
 def main():
     parser = argparse.ArgumentParser(description='Kong command line client for admin api.')
+    parser.add_argument('--version', action='store_true', default=False, help='Get tool version')
 
-    def usage_func(*args, **kwargs):
+    def usage_func(args, *argsl, **kwargs):
+        if args.version:
+            print(__version__)
+            return
+
         parser.print_help()
 
     parser.set_defaults(func=usage_func)
     HttpClient.build_parser(parser)
 
-    sb = parser.add_subparsers(help='sub-command help')
-    list_ = sb.add_parser('list',   help='')
-    get = sb.add_parser('get',    help='Get all services')
-    create = sb.add_parser('create', help='Get all services')
-    update = sb.add_parser('update', help='Get all services')
-    delete = sb.add_parser('delete', help='Get all services')
+    sb = parser.add_subparsers(help='')
+    list_ = sb.add_parser('list', help='Get all resources')
+    get = sb.add_parser('get', help='Get particular resource')
+    create = sb.add_parser('create', help='Create resource')
+    update = sb.add_parser('update', help='Update resource')
+    delete = sb.add_parser('delete', help='Delete resource')
 
     base_args, _ = parser.parse_known_args()
     httpClient = HttpClient.build_from_args(base_args)
