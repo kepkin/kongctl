@@ -173,6 +173,7 @@ class RouteResource(BaseResource):
         get.add_argument("route", help='route id')
 
         create = sb_create.add_parser(self.resource_name[:-1])
+        create.add_argument('-s', "--service", default=None, help='service name or id')
         create.set_defaults(func=self.create)
         # @TODO
 
