@@ -261,3 +261,125 @@ class PluginResource(BaseResource):
         delete = sb_delete.add_parser(self.resource_name[:-1])
         delete.set_defaults(func=self.delete)
         delete.add_argument("plugin", help='plugin id')
+
+
+class PluginSchemaResource(BaseResource):
+    def __init__(self, http_client, formatter):
+        super().__init__(http_client, formatter, 'plugins/schema')
+
+    def short_formatter(self, resource):
+        self.formatter.println(resource)
+
+    def id_getter(self, resource_name):
+        raise NotImplemented()
+
+    def _list(self, args, non_parsed):
+        r = self.http_client.get(self._build_resource_url('list', args, non_parsed))
+        data = r.json()
+
+        for resource in data['enabled_plugins']:
+            yield resource
+
+    def _build_resource_url(self, op, args=None, non_parsed=None, id_=None):
+        if op == 'get':
+            return '/plugins/schema/{}'.format(args.plugin)
+        elif op == 'list':
+            return '/plugins/enabled/'
+        else:
+            raise NotImplemented()
+
+    def build_parser(self, sb_list, sb_get, sb_create, sb_update, sb_delete):
+        list_ = sb_list.add_parser('pluginSchema')
+        list_.set_defaults(func=self.list)
+
+        get = sb_get.add_parser('pluginSchema')
+        get.set_defaults(func=self.get)
+        get.add_argument("plugin", help='plugin name')
+
+
+class ConsumerResource(BaseResource):
+    def __init__(self, http_client, formatter):
+        super().__init__(http_client, formatter, 'consumers')
+
+    def short_formatter(self, resource):
+        self.formatter.print_pair(resource['id'], resource['username'], indent=1)
+
+    def id_getter(self, resource_name):
+        r = self.http_client.get('/{}/{}'.format("consumers", resource_name))
+        return r.json()['id']
+
+    def create(self, args, non_parsed):
+        url = self._build_resource_url('create', args, non_parsed)
+
+        data = self.load_data_from_stdin()
+        data['username'] = args.username
+
+        r = self.http_client.post(url, json=data)
+        self.formatter.print_obj(r.json())
+
+    def build_parser(self, sb_list, sb_get, sb_create, sb_update, sb_delete):
+        list_ = sb_list.add_parser(self.resource_name)
+        list_.set_defaults(func=self.list)
+
+        get = sb_get.add_parser(self.resource_name[:-1])
+        get.set_defaults(func=self.get)
+        get.add_argument("consumer", help='consumer id')
+
+        create = sb_create.add_parser(self.resource_name[:-1])
+        create.add_argument("-u", "--username", default=None, help="consumer's username")
+        create.set_defaults(func=self.create)
+        # @TODO
+
+        update = sb_update.add_parser(self.resource_name[:-1])
+        update.set_defaults(func=self.update)
+        update.add_argument("consumer", help='consumer id')
+        # @TODO
+
+        delete = sb_delete.add_parser(self.resource_name[:-1])
+        delete.set_defaults(func=self.delete)
+        delete.add_argument("consumer", help='consumer id')
+
+
+class KeyAuthResource(BaseResource):
+    def __init__(self, http_client, formatter):
+        super().__init__(http_client, formatter, 'keyAuth')
+
+    def short_formatter(self, resource):
+        self.formatter.print_pair('key', resource['key'], indent=0)
+
+    def _build_resource_url(self, op, args=None, non_parsed=None, id_=None):
+        if op == 'get_by_id':
+            raise NotImplemented()
+        elif op == 'list':
+            return '/consumers/{}/key-auth/'.format(args.consumer)
+        elif op in {'get', 'update', 'delete'}:
+            return '/consumers/{}/key-auth/{}'.format(args.consumer, args.keyauth)
+        elif op in {'create'}:
+            return '/consumers/{}/key-auth/'.format(args.consumer)
+
+    def id_getter(self, resource_name):
+        raise NotImplemented()
+
+    def build_parser(self, sb_list, sb_get, sb_create, sb_update, sb_delete):
+        list_ = sb_list.add_parser(self.resource_name)
+        list_.set_defaults(func=self.list)
+        list_.add_argument("consumer", help='consumer id {username or id}')
+
+        get = sb_get.add_parser(self.resource_name)
+        get.set_defaults(func=self.get)
+        get.add_argument("consumer", help='consumer id {username or id}')
+        get.add_argument("keyauth", help='id of keyauth')
+
+        create = sb_create.add_parser(self.resource_name)
+        create.add_argument("consumer", help='Will apply plugin data to this consumer {username or id}')
+        create.set_defaults(func=self.create)
+
+        update = sb_update.add_parser(self.resource_name)
+        update.set_defaults(func=self.update)
+        update.add_argument("consumer", help='Will apply plugin data to this consumer {username or id}')
+        update.add_argument("keyauth", help='id of keyauth')
+
+        delete = sb_delete.add_parser(self.resource_name)
+        delete.set_defaults(func=self.delete)
+        delete.add_argument("consumer", help='consumer id {username or id}')
+        delete.add_argument("keyauth", help='id of keyauth')

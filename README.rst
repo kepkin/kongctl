@@ -52,6 +52,7 @@ TODO
 
  - Support for OIDC authorization
  - Get stubs for create operation
+ - Support all key-auth like plugins
  - Support update from cmd args
  - Support yaml
  - Sort by id?

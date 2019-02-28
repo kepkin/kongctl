@@ -56,7 +56,12 @@ class HttpClient(object):
         kwargs['timeout'] = self.timeout
         res = self.session.request(method, self.endpoint + url, *args, **kwargs)
         if self.verbose:
-            print("Recieved {}: {}".format(res.status_code, res.json()))
+            json_body = None
+            try:
+                json_body = res.json()
+            except:
+                pass
+            print("Recieved {}: {}".format(res.status_code, json_body))
 
         if res.status_code not in {200, 201, 204}:
             raise RuntimeError("Return status code: {}".format(res.status_code))

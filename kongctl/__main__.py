@@ -44,6 +44,9 @@ def main():
     ServiceResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
     RouteResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
     PluginResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    PluginSchemaResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    ConsumerResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    KeyAuthResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
 
     args, non_parsed = parser.parse_known_args()
     try:
@@ -51,9 +54,6 @@ def main():
 
     except KeyboardInterrupt:
         sys.exit(0)
-
-    except Exception as ex:
-        print("Error: ", ex)
 
 
 if __name__ == '__main__':
