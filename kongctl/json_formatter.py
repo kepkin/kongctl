@@ -19,29 +19,38 @@ class JsonOutputFormatter(object):
 
     def print_obj(self, data, indent=0):
         if isinstance(data, dict):
-            self._write('{\n')
-            self.print_dict(data, indent + 1)
-            self._write(self.indent_spacer(indent))
-            self._write('}\n')
+            self.print_dict(data, indent)
         elif isinstance(data, str):
-            self._write('"{}",\n'.format(data))
+            self._write('"{}"'.format(data.replace('\n', "\\n")))
         elif isinstance(data, list):
-            self._write('[{}],\n'.format(", ".join(data)))
+            self._write('[{}]'.format(", ".join(data)))
         elif isinstance(data, tuple):
-            self._write('{},\n'.format(data))
+            self._write('{}'.format(data))
+        elif isinstance(data, bool):
+            self._write('true' if data else 'false')
         else:
-            self._write('{},\n'.format(data))
+            self._write('{}'.format(data))
 
     def print_dict(self, data, indent=0):
+        self._write('{\n')
         keys = list(data.keys())
         keys.sort()
 
+        not_first = False
         for k in keys:
+            if not_first:
+                self._write(',\n')
+            not_first = True
+
             v = data[k]
-            self._write(self.indent_spacer(indent))
+            self._write(self.indent_spacer(indent + 1))
             self._write('"{}"'.format(k), 'blue')
             self._write(': ')
-            self.print_obj(v, indent)
+            self.print_obj(v, indent + 1)
+
+        self._write('\n')
+        self._write(self.indent_spacer(indent))
+        self._write('}')
 
     def print_header(self, data):
         self._write(data + '\n', attrs=['bold'])

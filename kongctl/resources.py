@@ -51,6 +51,7 @@ class BaseResource(object):
         for resource in self._list(args, non_parsed):
             if args.list_full:
                 self.formatter.print_obj(resource)
+                self.formatter.println()
             else:
                 self.short_formatter(resource)
 
