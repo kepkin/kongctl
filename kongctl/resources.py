@@ -128,8 +128,8 @@ class RouteResource(BaseResource):
         super().__init__(http_client, formatter, 'routes')
 
     def short_formatter(self, resource, indent=0):
-        hosts = resource['hosts'] or ['*']
-        paths = resource['paths'] or ['/']
+        hosts = resource.get('hosts', None) or ['*']
+        paths = resource.get('paths', None) or ['/']
 
         ref = ServiceResource(self.http_client, self.formatter)
         self.formatter.print_pair(resource['id'], ref.get_by_id(resource['service']['id'])['name'], indent=indent)
@@ -202,7 +202,7 @@ class PluginResource(BaseResource):
         if resource.get('route_id'):
             route_res = route_ref.get_by_id(resource['route_id'])
 
-        self.formatter.print_header("{}: {} (service {})".format(resource['id'], resource['name'], service_name))
+        self.formatter.print_header("{}: {} (service {}) {}".format(resource['id'], resource['name'], service_name, 'on' if resource['enabled'] else 'off'))
         self.formatter.print_pair('Service', service_name, indent=1)
 
         if route_res:
