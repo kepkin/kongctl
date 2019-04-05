@@ -192,16 +192,33 @@ class PluginResource(BaseResource):
     def __init__(self, http_client, formatter):
         super().__init__(http_client, formatter, 'plugins')
 
+    @staticmethod
+    def _chain_key_get(d, *keys):
+        for key in keys:
+            v = d
+            for key_part in key.split('.'):
+                if not isinstance(v, dict):
+                    break
+
+                v = v.get(key_part)
+
+            if v:
+                return v
+
+        return None
+
     def short_formatter(self, resource):
         service_name = '*all*'
         route_res = None
-        if resource.get('service_id'):
+        service_id = self._chain_key_get(resource, 'service.id', 'service_id')
+        if service_id:
             ref = ServiceResource(self.http_client, self.formatter)
-            service_name = ref.get_by_id(resource['service_id'])['name']
+            service_name = ref.get_by_id(service_id)['name']
 
         route_ref = RouteResource(self.http_client, self.formatter)
-        if resource.get('route_id'):
-            route_res = route_ref.get_by_id(resource['route_id'])
+        route_id = self._chain_key_get(resource, 'route.id', 'route_id')
+        if route_id:
+            route_res = route_ref.get_by_id(route_id)
 
         self.formatter.print_header("{}: {} (service {}) {}".format(resource['id'], resource['name'], service_name, 'on' if resource['enabled'] else 'off'))
         self.formatter.print_pair('Service', service_name, indent=1)
@@ -231,10 +248,10 @@ class PluginResource(BaseResource):
         data = self.load_data_from_stdin()
 
         if args.service:
-            data['service_id'] = service_ref.id_getter(args.service)
+            data['service'] = {'id': service_ref.id_getter(args.service)}
 
         if args.route:
-            data['route_id'] = route_ref.id_getter(args.route)
+            data['route'] = {'id': route_ref.id_getter(args.route)}
 
         r = self.http_client.post(url, json=data)
         self.formatter.print_obj(r.json())

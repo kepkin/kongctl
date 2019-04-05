@@ -23,13 +23,25 @@ class JsonOutputFormatter(object):
         elif isinstance(data, str):
             self._write('"{}"'.format(data.replace('\n', "\\n")))
         elif isinstance(data, list):
-            self._write('[{}]'.format(", ".join(data)))
+            self.print_list(data, indent)
         elif isinstance(data, tuple):
-            self._write('{}'.format(data))
+            self.print_list(data, indent)
         elif isinstance(data, bool):
             self._write('true' if data else 'false')
         else:
             self._write('{}'.format(data))
+
+    def print_list(self, data, indent=0):
+        self._write('[')
+
+        not_first = False
+        for v in data:
+            if not_first:
+                self._write(', ')
+            not_first = True
+            self.print_obj(v, indent)
+
+        self._write(']')
 
     def print_dict(self, data, indent=0):
         self._write('{\n')
