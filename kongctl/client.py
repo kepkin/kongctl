@@ -59,7 +59,7 @@ class HttpClient(object):
             json_body = None
             try:
                 json_body = res.json()
-            except:
+            except Exception:
                 pass
             print("Recieved {}: {}".format(res.status_code, json_body))
 
