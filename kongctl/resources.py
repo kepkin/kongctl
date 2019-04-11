@@ -1,6 +1,17 @@
 import json
 import sys
 
+_get_verison = None
+def get_version(http_client):
+    global _get_verison
+    if _get_verison != None:
+        return _get_verison
+
+    r = http_client.get('/')
+    data = r.json()
+    _get_verison = tuple(map(int, data['version'].split('.')))
+    return _get_verison
+
 
 class BaseResource(object):
     def __init__(self, http_client, formatter, resource_name):
@@ -8,6 +19,7 @@ class BaseResource(object):
         self.cache = dict()
         self.http_client = http_client
         self.formatter = formatter
+        self.version = get_version(http_client)
 
     def short_formatter(self, resource):
         return "{}".format(resource['id'])
@@ -236,6 +248,8 @@ class PluginResource(BaseResource):
     def _build_resource_url(self, op, args, non_parsed, **kwargs):
         if op in {'list'} and args and args.service is not None:
             return '/{}/{}/{}/'.format('services', args.service, self.resource_name)
+        elif op in {'list'} and args and args.route is not None:
+            return '/{}/{}/{}/'.format('routes', args.route, self.resource_name)
         else:
             return super()._build_resource_url(op, args, non_parsed, **kwargs)
 
@@ -248,10 +262,16 @@ class PluginResource(BaseResource):
         data = self.load_data_from_stdin()
 
         if args.service:
-            data['service'] = {'id': service_ref.id_getter(args.service)}
+            if self.version[0] < 1:
+                data['service_id'] = service_ref.id_getter(args.service)
+            else:
+                data['service'] = {'id': service_ref.id_getter(args.service)}
 
         if args.route:
-            data['route'] = {'id': route_ref.id_getter(args.route)}
+            if self.version[0] < 1:
+                data['route_id'] = route_ref.id_getter(args.route)
+            else:
+                data['route'] = {'id': route_ref.id_getter(args.route)}
 
         r = self.http_client.post(url, json=data)
         self.formatter.print_obj(r.json())
@@ -260,6 +280,7 @@ class PluginResource(BaseResource):
         list_ = sb_list.add_parser(self.resource_name)
         list_.set_defaults(func=self.list)
         list_.add_argument('-s', "--service", default=None, help='Will list plugins for this service (name or id)')
+        list_.add_argument('-r', "--route", default=None, help='Will list plugins for this route (name or id)')
 
         get = sb_get.add_parser(self.resource_name[:-1])
         get.set_defaults(func=self.get)
