@@ -96,6 +96,7 @@ publish-no-test:
 	@echo $(TAG)Testing wheel build an installation$(END)
 	@echo "$(VERSION)"
 	@echo "$(VERSION)" | grep -q "dev" && echo '!!!Not publishing dev version!!!' && exit 1 || echo ok
+	pip install requests docutils
 	twine upload dist/*
 	@echo
 
