@@ -4,13 +4,13 @@ from .json_formatter import JsonOutputFormatter
 class YamlOutputFormatter(JsonOutputFormatter):
     first_move = 2
 
-    def print_obj(self, data, indent=0, tab=1):
+    def print_obj(self, data, indent=0):
         if self.first_move == 2:
             self.print_version()
         if isinstance(data, dict):
-            self.print_dict(data, indent, tab)
+            self.print_dict(data, indent)
         elif isinstance(data, str):
-            self._write('{}'.format(data.replace('\n', "\\n")))
+            self._write('{}'.format(data))
         elif isinstance(data, list):
             self.print_list(data, indent)
         elif isinstance(data, tuple):
@@ -22,7 +22,7 @@ class YamlOutputFormatter(JsonOutputFormatter):
         else:
             self._write('{}'.format(data))
 
-    def print_list(self, data, indent=0, isn=1):
+    def print_list(self, data, indent=0):
         if len(data) != 0:
             self._write('\n' + self.indent_spacer(indent) + '- ', 'green')
             not_first = False
@@ -31,18 +31,17 @@ class YamlOutputFormatter(JsonOutputFormatter):
                     self._write('\n' + self.indent_spacer(indent) + '- ', 'green')
                 not_first = True
                 if isinstance(v, dict):
-                    self.print_obj(v, -1, 0)
+                    self.print_obj(v, -1)
                 else:
-                    self.print_obj(v, indent + isn, 0)
+                    self.print_obj(v, indent + 1)
         else:
             self._write('[]')
 
-    def print_dict(self, data, indent=0, tab=1):
+    def print_dict(self, data, indent=0):
         keys = list(data.keys())
         keys.sort()
-        if tab and not self.first_move:
+        if not self.first_move:
             self._write('\n')
-        tab = 1
         self.first_move = 0
         not_first = False
         for k in keys:
@@ -55,7 +54,7 @@ class YamlOutputFormatter(JsonOutputFormatter):
             self._write(': ')
             if indent < 0:
                 indent = 2
-            self.print_obj(v, indent + 1, tab)
+            self.print_obj(v, indent + 1)
         self._write(self.indent_spacer(indent))
 
     def print_version(self):
