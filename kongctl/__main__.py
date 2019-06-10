@@ -1,5 +1,6 @@
 
 from .json_formatter import JsonOutputFormatter
+from .yaml_formatter import YamlOutputFormatter
 from .client import HttpClient
 from .resources import *
 from . import __version__
@@ -31,8 +32,13 @@ def main():
 
     base_args, _ = parser.parse_known_args()
     httpClient = HttpClient.build_from_args(base_args)
-    formatter = JsonOutputFormatter()
+    parser.add_argument('-y', '--yml', default=False, action='store_true', help='Yaml conversion')
 
+    args, _ = parser.parse_known_args()
+    if args.yml:
+        formatter = YamlOutputFormatter()
+    else:
+        formatter = JsonOutputFormatter()
     list_.add_argument('-f', dest="list_full", action='store_true', default=False, help='Get full description of resource')
 
     sb_list = list_.add_subparsers()
