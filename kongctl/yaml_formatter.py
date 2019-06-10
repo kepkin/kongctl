@@ -5,12 +5,12 @@ class YamlOutputFormatter(JsonOutputFormatter):
     first_move = 2
 
     def print_obj(self, data, indent=0):
-        if self.first_move == 2:
-            self.print_version()
+        # if self.first_move == 2:
+        #     self.print_version()
         if isinstance(data, dict):
             self.print_dict(data, indent)
         elif isinstance(data, str):
-            self._write('{}'.format(data))
+            self.print_str(data, indent)
         elif isinstance(data, list):
             self.print_list(data, indent)
         elif isinstance(data, tuple):
@@ -21,6 +21,19 @@ class YamlOutputFormatter(JsonOutputFormatter):
             self._write('~')
         else:
             self._write('{}'.format(data))
+
+    def print_str(self, data, indent=0):
+        if data.count('\n') > 1:
+            data = self.indent_spacer_char*indent + data.replace('\n', '\n' + self.indent_spacer_char*indent)
+            if data[-1] != '\n':
+                data = '|-\n' + data
+            elif data[-2] == '\n':
+                data = '|+\n' + data
+            else:
+                data = '|\n' + data
+        else:
+            data = data.replace('\n', '\\n')
+        self._write(data)
 
     def print_list(self, data, indent=0):
         if len(data) != 0:
@@ -57,5 +70,5 @@ class YamlOutputFormatter(JsonOutputFormatter):
             self.print_obj(v, indent + 1)
         self._write(self.indent_spacer(indent))
 
-    def print_version(self):
-        self._write("_format_version: \"1.1\"\n")
+    # def print_version(self):
+    #     self._write("_format_version: \"1.1\"\n")
