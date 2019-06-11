@@ -2,7 +2,7 @@ from .json_formatter import JsonOutputFormatter
 
 
 class YamlOutputFormatter(JsonOutputFormatter):
-    first_move = 2
+    first_move = 1
 
     def print_obj(self, data, indent=0):
         # if self.first_move == 2:
@@ -44,6 +44,7 @@ class YamlOutputFormatter(JsonOutputFormatter):
                     self._write('\n' + self.indent_spacer(indent) + '- ', 'green')
                 not_first = True
                 if isinstance(v, dict):
+                    self.first_move = 1
                     self.print_obj(v, -1)
                 else:
                     self.print_obj(v, indent + 1)
