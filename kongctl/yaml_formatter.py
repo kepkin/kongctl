@@ -2,17 +2,17 @@ from .json_formatter import JsonOutputFormatter
 
 
 class YamlOutputFormatter(JsonOutputFormatter):
-    first_move = 1
-
     def print_obj(self, data, indent=0):
-        # if self.first_move == 2:
-        #     self.print_version()
+        self._print_obj(data, indent)
+        self._write('\n')
+
+    def _print_obj(self, data, indent=0, from_type=None):
         if isinstance(data, dict):
-            self.print_dict(data, indent)
+            self.print_dict(data, indent, from_type=from_type)
         elif isinstance(data, str):
             self.print_str(data, indent)
         elif isinstance(data, list):
-            self.print_list(data, indent)
+            self.print_list(data, indent, from_type=from_type)
         elif isinstance(data, tuple):
             self.print_list(data, indent)
         elif isinstance(data, bool):
@@ -35,41 +35,32 @@ class YamlOutputFormatter(JsonOutputFormatter):
             data = data.replace('\n', '\\n')
         self._write(data)
 
-    def print_list(self, data, indent=0):
-        if len(data) != 0:
-            self._write('\n' + self.indent_spacer(indent) + '- ', 'green')
-            not_first = False
-            for v in data:
-                if not_first:
-                    self._write('\n' + self.indent_spacer(indent) + '- ', 'green')
-                not_first = True
-                if isinstance(v, dict):
-                    self.first_move = 1
-                    self.print_obj(v, -1)
-                else:
-                    self.print_obj(v, indent + 1)
-        else:
+    def print_list(self, data, indent=0, from_type=None):
+        if len(data) == 0:
             self._write('[]')
+            return
 
-    def print_dict(self, data, indent=0):
-        keys = list(data.keys())
-        keys.sort()
-        if not self.first_move:
-            self._write('\n')
-        self.first_move = 0
         not_first = False
-        for k in keys:
-            if not_first:
+
+        for v in data:
+            if not_first or from_type is dict:
                 self._write('\n')
             not_first = True
+
+            self._write(self.indent_spacer(indent) + '- ', 'green')
+            self._print_obj(v, indent + 1, from_type=list)
+
+    def print_dict(self, data, indent=0, from_type=None):
+        keys = list(data.keys())
+        keys.sort()
+        not_first = False
+        for k in keys:
+            if not_first or from_type is dict:
+                self._write('\n')
+                self._write(self.indent_spacer(indent))
+            not_first = True
             v = data[k]
-            self._write(self.indent_spacer(indent))
+
             self._write('{}'.format(k), 'red')
             self._write(': ')
-            if indent < 0:
-                indent = 2
-            self.print_obj(v, indent + 1)
-        self._write(self.indent_spacer(indent))
-
-    # def print_version(self):
-    #     self._write("_format_version: \"1.1\"\n")
+            self._print_obj(v, indent + 1, from_type=dict)
