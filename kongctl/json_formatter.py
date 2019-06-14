@@ -80,3 +80,4 @@ class JsonOutputFormatter(object):
 
     def _write(self, string, *args, **kwargs):
         print(self._colored(string, *args, **kwargs), end='')
+
