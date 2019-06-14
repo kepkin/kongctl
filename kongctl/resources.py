@@ -483,7 +483,7 @@ class YamlConfigResource(BaseResource):
             plugin['config'] = n['config']
             config_obj['plugins'].append(plugin)
 
-        self.formatter._header()
+        self._header()
         self.formatter.print_obj(config_obj)
 
     def yaml_list(self, args, not_parsed):
@@ -498,3 +498,7 @@ class YamlConfigResource(BaseResource):
 
     def build_parser(self, config):
         config = config.set_defaults(func=self.yaml_list)
+
+    def _header(self):
+        self.formatter._write('_format_version: \"1.1\"')
+        self.formatter._write('\n\n')

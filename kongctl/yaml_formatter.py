@@ -63,7 +63,3 @@ class YamlOutputFormatter(JsonOutputFormatter):
             self._write('{}'.format(k), 'red')
             self._write(': ')
             self._print_obj(v, indent + 1, from_type=dict)
-
-    def _header(self):
-        self._write('_format_version: \"1.1\"')
-        self._write('\n\n')
