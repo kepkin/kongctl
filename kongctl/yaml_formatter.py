@@ -3,7 +3,6 @@ from .json_formatter import JsonOutputFormatter
 
 class YamlOutputFormatter(JsonOutputFormatter):
     def print_obj(self, data, indent=0):
-        self._header()
         self._print_obj(data, indent)
         self._write('\n')
 

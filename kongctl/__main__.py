@@ -48,7 +48,7 @@ def main():
     sb_update = update.add_subparsers()
     sb_delete = delete.add_subparsers()
 
-    YamlConfigResource(httpClient, formatter, 'services').build_parser(config)
+    YamlConfigResource(httpClient, formatter).build_parser(config)
     ServiceResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
     RouteResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
     PluginResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)

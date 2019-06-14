@@ -426,8 +426,10 @@ class KeyAuthResource(BaseResource):
 
 
 class YamlConfigResource(BaseResource):
-    data = dict()
-    dir = 'services'
+    def __init__(self, http_client, formatter):
+        super().__init__(http_client, formatter, 'services')
+        self.data = dict()
+        self.dir = 'services'
 
     def _build_resource_url(self, op, args, non_parsed):
         if op in {'list'} and args and args.service is not None:
@@ -457,23 +459,31 @@ class YamlConfigResource(BaseResource):
         config_obj = collections.OrderedDict()
         config_obj['services'] = list()
 
-        config_obj['services'].append(collections.OrderedDict())
-        config_obj['services'][-1]['name'] = self.data['service']['id']
-        config_obj['services'][-1]['url'] = self.data['service']['host']
+        service = collections.OrderedDict()
+        service['name'] = self.data['service']['name']
+        service['url'] = self.data['service']['protocol'] + \
+                         "://" + self.data['service']['host'] + \
+                         ":" + str(self.data['service']['port'])
+        service['url'] += str(self.data['service']['path']) if self.data['service']['path'] != None else ''
 
-        config_obj['services'][-1]['routes'] = list()
+        service['routes'] = list()
         for n in self.data['routes']:
-            config_obj['services'][-1]['routes'].append(collections.OrderedDict())
-            config_obj['services'][-1]['routes'][-1]['name'] = n['id']
-            config_obj['services'][-1]['routes'][-1]['paths'] = n['paths']
+            route = collections.OrderedDict()
+            route['name'] = n['id']
+            route['paths'] = n['paths']
+            service['routes'].append(collections.OrderedDict(name=n['id'], paths=n['paths']))
+
+        config_obj['services'].append(service)
 
         config_obj['plugins'] = list()
         for n in self.data['plugins']:
-            config_obj['plugins'].append(collections.OrderedDict())
-            config_obj['plugins'][-1]['name'] = n['name']
-            config_obj['plugins'][-1]['route'] = n['route']['id']
-            config_obj['plugins'][-1]['config'] = n['config']
+            plugin = collections.OrderedDict()
+            plugin['name'] = n['name']
+            plugin['route'] = n['route']['id']
+            plugin['config'] = n['config']
+            config_obj['plugins'].append(plugin)
 
+        self.formatter._header()
         self.formatter.print_obj(config_obj)
 
     def yaml_list(self, args, not_parsed):
