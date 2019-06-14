@@ -1,5 +1,6 @@
 import json
 import sys
+import collections
 
 _get_verison = None
 def get_version(http_client):
@@ -422,3 +423,68 @@ class KeyAuthResource(BaseResource):
         delete.set_defaults(func=self.delete)
         delete.add_argument("consumer", help='consumer id {username or id}')
         delete.add_argument("keyauth", help='id of keyauth')
+
+
+class YamlConfigResource(BaseResource):
+    data = dict()
+    dir = 'services'
+
+    def _build_resource_url(self, op, args, non_parsed):
+        if op in {'list'} and args and args.service is not None:
+            return '/{}/{}/{}/'.format('services', args.service, self.resource_name)
+        else:
+            return super()._build_resource_url(op, args, non_parsed)
+
+    def get_data(self, args, non_parsed):
+        url = self._build_resource_url('get', args, non_parsed)
+        r = self.http_client.get(url)
+        return r.json()
+
+    def get_list(self, args, non_parsed, rout_or_plug):
+        self.data[rout_or_plug] = []
+        self.dir = rout_or_plug
+        self.resource_name = rout_or_plug
+
+        for resource in self._list(args, non_parsed):
+            setattr(args, rout_or_plug[:-1], resource['id'])
+            self.data[rout_or_plug].append(self.get_data(args, non_parsed))
+
+    def id_getter(self, resource_name):
+        r = self.http_client.get('/{}/{}'.format(self.dir, resource_name))
+        return r.json()['id']
+
+    def contain_config(self):
+        config_obj = collections.OrderedDict()
+        config_obj['services'] = list()
+
+        config_obj['services'].append(collections.OrderedDict())
+        config_obj['services'][-1]['name'] = self.data['service']['id']
+        config_obj['services'][-1]['url'] = self.data['service']['host']
+
+        config_obj['services'][-1]['routes'] = list()
+        for n in self.data['routes']:
+            config_obj['services'][-1]['routes'].append(collections.OrderedDict())
+            config_obj['services'][-1]['routes'][-1]['name'] = n['id']
+            config_obj['services'][-1]['routes'][-1]['paths'] = n['paths']
+
+        config_obj['plugins'] = list()
+        for n in self.data['plugins']:
+            config_obj['plugins'].append(collections.OrderedDict())
+            config_obj['plugins'][-1]['name'] = n['name']
+            config_obj['plugins'][-1]['route'] = n['route']['id']
+            config_obj['plugins'][-1]['config'] = n['config']
+
+        self.formatter.print_obj(config_obj)
+
+    def yaml_list(self, args, not_parsed):
+        args.service = not_parsed[-1]
+        self.data['service'] = self.get_data(args, not_parsed)
+        self.get_list(args, not_parsed, 'routes')
+        self.get_list(args, not_parsed, 'plugins')
+        self.dir = 'services'
+        self.resource_name = 'services'
+
+        self.contain_config()
+
+    def build_parser(self, config):
+        config = config.set_defaults(func=self.yaml_list)
