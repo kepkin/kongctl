@@ -435,18 +435,17 @@ class KeyAuthResource(BaseResource):
 class YamlConfigResource(BaseResource):
     def __init__(self, http_client, formatter):
         super().__init__(http_client, formatter, 'services')
-        self.data = dict()
 
-    def get_list(self, args, non_parsed, dir):
-        self.data[dir] = []
+    def get_list(self, args, non_parsed, resource_name):
+        self.data[resource_name] = []
 
-        if dir == 'routes':
+        if resource_name == 'routes':
             lst = RouteResource(self.http_client, self.formatter)
-        elif dir == 'plugins':
+        elif resource_name == 'plugins':
             lst = PluginResource(self.http_client, self.formatter)
 
         for resource in lst._list(args, non_parsed):
-            self.data[dir].append(resource)
+            self.data[resource_name].append(resource)
 
     def id_getter(self, resource_name):
         r = self.http_client.get('/{}/{}'.format('services', resource_name))
@@ -483,6 +482,7 @@ class YamlConfigResource(BaseResource):
         self.formatter.print_obj(config_obj)
 
     def yaml_list(self, args, non_parsed):
+        self.data = dict()
         self.data['service'] = self._get(args, non_parsed)
         self.get_list(args, non_parsed, 'routes')
         self.get_list(args, non_parsed, 'plugins')
