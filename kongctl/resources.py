@@ -33,6 +33,9 @@ class BaseResource(object):
         for _ in self._list(None, None):
             pass
 
+    def id_getter(self, name):
+        raise NotImplementedError()
+
     def load_data_from_stdin(self):
         data = sys.stdin.read()
         return json.loads(data)
@@ -79,6 +82,11 @@ class BaseResource(object):
             return r.json()
 
         return resource
+
+    def _get(self, args, non_parsed):
+        url = self._build_resource_url('get', args, non_parsed)
+        r = self.http_client.get(url)
+        return r.json()
 
     def get(self, args, non_parsed):
         url = self._build_resource_url('get', args, non_parsed)
@@ -429,30 +437,20 @@ class YamlConfigResource(BaseResource):
     def __init__(self, http_client, formatter):
         super().__init__(http_client, formatter, 'services')
         self.data = dict()
-        self.dir = 'services'
 
-    def _build_resource_url(self, op, args, non_parsed):
-        if op in {'list'} and args and args.service is not None:
-            return '/{}/{}/{}/'.format('services', args.service, self.resource_name)
-        else:
-            return super()._build_resource_url(op, args, non_parsed)
+    def get_list(self, args, non_parsed, dir):
+        self.data[dir] = []
 
-    def get_data(self, args, non_parsed):
-        url = self._build_resource_url('get', args, non_parsed)
-        r = self.http_client.get(url)
-        return r.json()
+        if dir == 'routes':
+            lst = RouteResource(self.http_client, self.formatter)
+        elif dir == 'plugins':
+            lst = PluginResource(self.http_client, self.formatter)
 
-    def get_list(self, args, non_parsed, rout_or_plug):
-        self.data[rout_or_plug] = []
-        self.dir = rout_or_plug
-        self.resource_name = rout_or_plug
-
-        for resource in self._list(args, non_parsed):
-            setattr(args, rout_or_plug[:-1], resource['id'])
-            self.data[rout_or_plug].append(self.get_data(args, non_parsed))
+        for resource in lst._list(args, non_parsed):
+            self.data[dir].append(resource)
 
     def id_getter(self, resource_name):
-        r = self.http_client.get('/{}/{}'.format(self.dir, resource_name))
+        r = self.http_client.get('/{}/{}'.format('services', resource_name))
         return r.json()['id']
 
     def contain_config(self):
@@ -461,9 +459,8 @@ class YamlConfigResource(BaseResource):
 
         service = collections.OrderedDict()
         service['name'] = self.data['service']['name']
-        service['url'] = self.data['service']['protocol'] + \
-                         "://" + self.data['service']['host'] + \
-                         ":" + str(self.data['service']['port'])
+        service['url'] = "{protocol}://{host}:{port}".format(**self.data['service'])
+
         service['url'] += str(self.data['service']['path']) if self.data['service']['path'] != None else ''
 
         service['routes'] = list()
@@ -471,7 +468,7 @@ class YamlConfigResource(BaseResource):
             route = collections.OrderedDict()
             route['name'] = n['id']
             route['paths'] = n['paths']
-            service['routes'].append(collections.OrderedDict(name=n['id'], paths=n['paths']))
+            service['routes'].append(route)
 
         config_obj['services'].append(service)
 
@@ -479,25 +476,23 @@ class YamlConfigResource(BaseResource):
         for n in self.data['plugins']:
             plugin = collections.OrderedDict()
             plugin['name'] = n['name']
-            plugin['route'] = n['route']['id']
+            plugin['route'] = n['route']
             plugin['config'] = n['config']
             config_obj['plugins'].append(plugin)
 
         self._header()
         self.formatter.print_obj(config_obj)
 
-    def yaml_list(self, args, not_parsed):
-        args.service = not_parsed[-1]
-        self.data['service'] = self.get_data(args, not_parsed)
-        self.get_list(args, not_parsed, 'routes')
-        self.get_list(args, not_parsed, 'plugins')
-        self.dir = 'services'
-        self.resource_name = 'services'
+    def yaml_list(self, args, non_parsed):
+        self.data['service'] = self._get(args, non_parsed)
+        self.get_list(args, non_parsed, 'routes')
+        self.get_list(args, non_parsed, 'plugins')
 
         self.contain_config()
 
     def build_parser(self, config):
-        config = config.set_defaults(func=self.yaml_list)
+        config.set_defaults(func=self.yaml_list)
+        config.add_argument("service")
 
     def _header(self):
         self.formatter._write('_format_version: \"1.1\"')
