@@ -89,9 +89,8 @@ class BaseResource(object):
         return r.json()
 
     def get(self, args, non_parsed):
-        url = self._build_resource_url('get', args, non_parsed)
-        r = self.http_client.get(url)
-        self.formatter.print_obj(r.json())
+        r = self._get(args, non_parsed)
+        self.formatter.print_obj(r)
 
     def create(self, args, non_parsed):
         url = self._build_resource_url('create', args, non_parsed)
