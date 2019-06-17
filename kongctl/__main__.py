@@ -29,6 +29,7 @@ def main():
     create = sb.add_parser('create', help='Create resource')
     update = sb.add_parser('update', help='Update resource')
     delete = sb.add_parser('delete', help='Delete resource')
+    config = sb.add_parser('config', help='Config yaml resource')
 
     base_args, _ = parser.parse_known_args()
     httpClient = HttpClient.build_from_args(base_args)
@@ -47,6 +48,7 @@ def main():
     sb_update = update.add_subparsers()
     sb_delete = delete.add_subparsers()
 
+    YamlConfigResource(httpClient, formatter).build_parser(config)
     ServiceResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
     RouteResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
     PluginResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)

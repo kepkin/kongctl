@@ -1,5 +1,6 @@
 import json
 import sys
+import collections
 
 _get_verison = None
 def get_version(http_client):
@@ -31,6 +32,9 @@ class BaseResource(object):
     def rebuild_cache(self):
         for _ in self._list(None, None):
             pass
+
+    def id_getter(self, name):
+        raise NotImplementedError()
 
     def load_data_from_stdin(self):
         data = sys.stdin.read()
@@ -79,10 +83,14 @@ class BaseResource(object):
 
         return resource
 
-    def get(self, args, non_parsed):
+    def _get(self, args, non_parsed):
         url = self._build_resource_url('get', args, non_parsed)
         r = self.http_client.get(url)
-        self.formatter.print_obj(r.json())
+        return r.json()
+
+    def get(self, args, non_parsed):
+        r = self._get(args, non_parsed)
+        self.formatter.print_obj(r)
 
     def create(self, args, non_parsed):
         url = self._build_resource_url('create', args, non_parsed)
@@ -422,3 +430,70 @@ class KeyAuthResource(BaseResource):
         delete.set_defaults(func=self.delete)
         delete.add_argument("consumer", help='consumer id {username or id}')
         delete.add_argument("keyauth", help='id of keyauth')
+
+
+class YamlConfigResource(BaseResource):
+    def __init__(self, http_client, formatter):
+        super().__init__(http_client, formatter, 'services')
+
+    def get_list(self, args, non_parsed, resource_name):
+        data = []
+
+        if resource_name == 'routes':
+            lst = RouteResource(self.http_client, self.formatter)
+        elif resource_name == 'plugins':
+            lst = PluginResource(self.http_client, self.formatter)
+
+        for resource in lst._list(args, non_parsed):
+            data.append(resource)
+        return data
+
+    def id_getter(self, resource_name):
+        r = self.http_client.get('/{}/{}'.format('services', resource_name))
+        return r.json()['id']
+
+    def print_config(self, data):
+        config_obj = collections.OrderedDict()
+        config_obj['services'] = list()
+
+        service = collections.OrderedDict()
+        service['name'] = data['service']['name']
+        service['url'] = "{protocol}://{host}:{port}".format(**data['service'])
+
+        service['url'] += str(data['service']['path']) if data['service']['path'] != None else ''
+
+        service['routes'] = list()
+        for n in data['routes']:
+            route = collections.OrderedDict()
+            route['name'] = n['id']
+            route['paths'] = n['paths']
+            service['routes'].append(route)
+
+        config_obj['services'].append(service)
+
+        config_obj['plugins'] = list()
+        for n in data['plugins']:
+            plugin = collections.OrderedDict()
+            plugin['name'] = n['name']
+            plugin['route'] = n['route']
+            plugin['config'] = n['config']
+            config_obj['plugins'].append(plugin)
+
+        self._header()
+        self.formatter.print_obj(config_obj)
+
+    def yaml_list(self, args, non_parsed):
+        data = dict()
+        data['service'] = self._get(args, non_parsed)
+        data['routes'] = self.get_list(args, non_parsed, 'routes')
+        data['plugins'] = self.get_list(args, non_parsed, 'plugins')
+
+        self.print_config(data)
+
+    def build_parser(self, config):
+        config.set_defaults(func=self.yaml_list)
+        config.add_argument("service")
+
+    def _header(self):
+        self.formatter._write('_format_version: \"1.1\"')
+        self.formatter._write('\n\n')

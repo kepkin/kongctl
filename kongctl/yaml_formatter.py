@@ -52,7 +52,6 @@ class YamlOutputFormatter(JsonOutputFormatter):
 
     def print_dict(self, data, indent=0, from_type=None):
         keys = list(data.keys())
-        keys.sort()
         not_first = False
         for k in keys:
             if not_first or from_type is dict:
