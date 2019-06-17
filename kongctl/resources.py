@@ -452,7 +452,7 @@ class YamlConfigResource(BaseResource):
         r = self.http_client.get('/{}/{}'.format('services', resource_name))
         return r.json()['id']
 
-    def contain_config(self):
+    def print_config(self):
         config_obj = collections.OrderedDict()
         config_obj['services'] = list()
 
@@ -487,7 +487,7 @@ class YamlConfigResource(BaseResource):
         self.get_list(args, non_parsed, 'routes')
         self.get_list(args, non_parsed, 'plugins')
 
-        self.contain_config()
+        self.print_config()
 
     def build_parser(self, config):
         config.set_defaults(func=self.yaml_list)
