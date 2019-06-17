@@ -437,7 +437,7 @@ class YamlConfigResource(BaseResource):
         super().__init__(http_client, formatter, 'services')
 
     def get_list(self, args, non_parsed, resource_name):
-        self.data[resource_name] = []
+        data = []
 
         if resource_name == 'routes':
             lst = RouteResource(self.http_client, self.formatter)
@@ -445,24 +445,25 @@ class YamlConfigResource(BaseResource):
             lst = PluginResource(self.http_client, self.formatter)
 
         for resource in lst._list(args, non_parsed):
-            self.data[resource_name].append(resource)
+            data.append(resource)
+        return data
 
     def id_getter(self, resource_name):
         r = self.http_client.get('/{}/{}'.format('services', resource_name))
         return r.json()['id']
 
-    def print_config(self):
+    def print_config(self, data):
         config_obj = collections.OrderedDict()
         config_obj['services'] = list()
 
         service = collections.OrderedDict()
-        service['name'] = self.data['service']['name']
-        service['url'] = "{protocol}://{host}:{port}".format(**self.data['service'])
+        service['name'] = data['service']['name']
+        service['url'] = "{protocol}://{host}:{port}".format(**data['service'])
 
-        service['url'] += str(self.data['service']['path']) if self.data['service']['path'] != None else ''
+        service['url'] += str(data['service']['path']) if data['service']['path'] != None else ''
 
         service['routes'] = list()
-        for n in self.data['routes']:
+        for n in data['routes']:
             route = collections.OrderedDict()
             route['name'] = n['id']
             route['paths'] = n['paths']
@@ -471,7 +472,7 @@ class YamlConfigResource(BaseResource):
         config_obj['services'].append(service)
 
         config_obj['plugins'] = list()
-        for n in self.data['plugins']:
+        for n in data['plugins']:
             plugin = collections.OrderedDict()
             plugin['name'] = n['name']
             plugin['route'] = n['route']
@@ -482,12 +483,12 @@ class YamlConfigResource(BaseResource):
         self.formatter.print_obj(config_obj)
 
     def yaml_list(self, args, non_parsed):
-        self.data = dict()
-        self.data['service'] = self._get(args, non_parsed)
-        self.get_list(args, non_parsed, 'routes')
-        self.get_list(args, non_parsed, 'plugins')
+        data = dict()
+        data['service'] = self._get(args, non_parsed)
+        data['routes'] = self.get_list(args, non_parsed, 'routes')
+        data['plugins'] = self.get_list(args, non_parsed, 'plugins')
 
-        self.print_config()
+        self.print_config(data)
 
     def build_parser(self, config):
         config.set_defaults(func=self.yaml_list)
