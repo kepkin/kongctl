@@ -482,7 +482,7 @@ class YamlConfigResource(BaseResource):
         self._header()
         self.formatter.print_obj(config_obj)
 
-    def yaml_list(self, args, non_parsed):
+    def yaml_service(self, args, non_parsed):
         data = dict()
         data['service'] = self._get(args, non_parsed)
         data['routes'] = self.get_list(args, non_parsed, 'routes')
@@ -490,9 +490,42 @@ class YamlConfigResource(BaseResource):
 
         self.print_config(data)
 
-    def build_parser(self, config):
-        config.set_defaults(func=self.yaml_list)
-        config.add_argument("service")
+    def yaml_consumer(self, args, non_parsed):
+        consumer_conf = dict()
+        consumer_conf['consumers'] = list()
+
+        if args.consumer:
+            consumer_list = list()
+            for i in ConsumerResource(self.http_client, self.formatter)._list(args, non_parsed):
+                if i['username'] == args.consumer:
+                    consumer_list.append(i)
+        else:
+            consumer_list = ConsumerResource(self.http_client, self.formatter)._list(args, non_parsed)
+
+        for v in consumer_list:
+            data = dict()
+
+            data['username'] = v['username']
+
+            data['keyauth_credentials'] = list()
+            key = dict()
+            args.consumer = data['username']
+            for n in KeyAuthResource(self.http_client, self.formatter)._list(args, non_parsed):
+                key['key'] = n['key']
+                data['keyauth_credentials'].append(key)
+
+            consumer_conf['consumers'].append(data)
+
+        self.formatter.print_obj(consumer_conf)
+
+    def build_parser(self, sb_config):
+        service_config = sb_config.add_parser('service')
+        service_config.set_defaults(func=self.yaml_service)
+        service_config.add_argument("service", help='service id {username or id}')
+
+        consumer_config = sb_config.add_parser('consumer')
+        consumer_config.set_defaults(func=self.yaml_consumer)
+        consumer_config.add_argument("consumer", default=None, nargs='?', help='consumer id {username or id}')
 
     def _header(self):
         self.formatter._write('_format_version: \"1.1\"')
