@@ -1,6 +1,7 @@
 import json
 import sys
 import collections
+import os
 
 _get_verison = None
 def get_version(http_client):
@@ -452,7 +453,7 @@ class YamlConfigResource(BaseResource):
         r = self.http_client.get('/{}/{}'.format('services', resource_name))
         return r.json()['id']
 
-    def print_config(self, data):
+    def get_config(self, data):
         config_obj = collections.OrderedDict()
         config_obj['services'] = list()
 
@@ -479,18 +480,17 @@ class YamlConfigResource(BaseResource):
             plugin['config'] = n['config']
             config_obj['plugins'].append(plugin)
 
-        self._header()
-        self.formatter.print_obj(config_obj)
+        return config_obj
 
-    def yaml_service(self, args, non_parsed):
+    def get_service(self, args, non_parsed):
         data = dict()
         data['service'] = self._get(args, non_parsed)
         data['routes'] = self.get_list(args, non_parsed, 'routes')
         data['plugins'] = self.get_list(args, non_parsed, 'plugins')
 
-        self.print_config(data)
+        return self.get_config(data)
 
-    def yaml_consumer(self, args, non_parsed):
+    def get_consumer(self, args, non_parsed):
         consumer_conf = dict()
         consumer_conf['consumers'] = list()
 
@@ -516,7 +516,56 @@ class YamlConfigResource(BaseResource):
 
             consumer_conf['consumers'].append(data)
 
-        self.formatter.print_obj(consumer_conf)
+        return consumer_conf
+
+    def yaml_consumer(self, args, non_parsed):
+        self.formatter.print_obj(self.get_consumer(args, non_parsed))
+
+    def yaml_service(self, args, non_parsed):
+        self._header()
+        self.formatter.print_obj(self.get_service(args, non_parsed))
+
+    def dump_service(self, args, non_parsed):
+        path = '/Users/avkazantsev/Desktop/work/kongctl/service/'
+        data = dict()
+
+        if args.service:
+            service_list = list()
+            for i in ServiceResource(self.http_client, self.formatter)._list(args, non_parsed):
+                if i['name'] == args.service or i['id'] == args.service:
+                    service_list.append(i)
+        else:
+            service_list = ServiceResource(self.http_client, self.formatter)._list(args, non_parsed)
+
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        for v in service_list:
+            args.service = v['name']
+            file_path = path + args.service + '.yml'
+            file = open(file_path, 'w')
+            service = self.get_service(args, non_parsed)
+            sys.stdout = file
+            self._header()
+            self.formatter.print_obj(service)
+            sys.stdout.close()
+
+    def dump_consumer(self, args, non_parsed):
+        path = '/Users/avkazantsev/Desktop/work/kongctl/consumers/'
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        consumer = self.get_consumer(args, non_parsed)
+        if not args.consumer:
+            file_name = args.consumer
+        else:
+            file_name = 'consumers'
+
+        file_path = path + file_name + '.yml'
+        file = open(file_path, 'w')
+        sys.stdout = file
+        self.formatter.print_obj(consumer)
+        sys.stdout.close()
 
     def build_parser(self, sb_config):
         service_config = sb_config.add_parser('service')
@@ -526,6 +575,17 @@ class YamlConfigResource(BaseResource):
         consumer_config = sb_config.add_parser('consumer')
         consumer_config.set_defaults(func=self.yaml_consumer)
         consumer_config.add_argument("consumer", default=None, nargs='?', help='consumer id {username or id}')
+
+        dump = sb_config.add_parser('dump')
+        sb_dump = dump.add_subparsers()
+
+        dump_service = sb_dump.add_parser('service')
+        dump_service.set_defaults(func=self.dump_service)
+        dump_service.add_argument("service", default=None, nargs='?', help='service id or None {username or id}')
+
+        dump_consumer = sb_dump.add_parser('consumer')
+        dump_consumer.set_defaults(func=self.dump_consumer)
+        dump_consumer.add_argument("consumer", default=None, nargs='?', help='consumer id or None {username or id}')
 
     def _header(self):
         self.formatter._write('_format_version: \"1.1\"')
