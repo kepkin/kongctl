@@ -3,11 +3,12 @@ from termcolor import colored
 
 
 class JsonOutputFormatter(object):
-    def __init__(self, indent_spacer="  "):
+    def __init__(self, output_file=sys.stdout, indent_spacer="  "):
         self._colored = self._dummy_colored
         self.indent_spacer_char = indent_spacer
+        self.output_file = output_file
 
-        if sys.stdout.isatty():
+        if self.output_file.isatty():
             self._colored = colored
 
     def indent_spacer(self, num):
@@ -79,5 +80,5 @@ class JsonOutputFormatter(object):
         self._write('\n')
 
     def _write(self, string, *args, **kwargs):
-        print(self._colored(string, *args, **kwargs), end='')
+        print(self._colored(string, *args, **kwargs), file=self.output_file, end='')
 

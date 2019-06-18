@@ -2,6 +2,7 @@ import json
 import sys
 import collections
 import os
+from .yaml_formatter import YamlOutputFormatter
 
 _get_verison = None
 def get_version(http_client):
@@ -496,16 +497,16 @@ class YamlConfigResource(BaseResource):
 
         if args.consumer:
             consumer_list = list()
-            for i in ConsumerResource(self.http_client, self.formatter)._list(args, non_parsed):
-                if i['username'] == args.consumer:
-                    consumer_list.append(i)
+            for consumer in ConsumerResource(self.http_client, self.formatter)._list(args, non_parsed):
+                if consumer['username'] == args.consumer:
+                    consumer_list.append(consumer)
         else:
             consumer_list = ConsumerResource(self.http_client, self.formatter)._list(args, non_parsed)
 
-        for v in consumer_list:
+        for consumer in consumer_list:
             data = dict()
 
-            data['username'] = v['username']
+            data['username'] = consumer['username']
 
             data['keyauth_credentials'] = list()
             key = dict()
@@ -526,7 +527,7 @@ class YamlConfigResource(BaseResource):
         self.formatter.print_obj(self.get_service(args, non_parsed))
 
     def dump_service(self, args, non_parsed):
-        path = '/Users/avkazantsev/Desktop/work/kongctl/service/'
+        path = './services/'
         data = dict()
 
         if args.service:
@@ -540,18 +541,16 @@ class YamlConfigResource(BaseResource):
         if not os.path.isdir(path):
             os.mkdir(path)
 
-        for v in service_list:
-            args.service = v['name']
+        for service in service_list:
+            args.service = service['name']
             file_path = path + args.service + '.yml'
             file = open(file_path, 'w')
-            service = self.get_service(args, non_parsed)
-            sys.stdout = file
-            self._header()
-            self.formatter.print_obj(service)
-            sys.stdout.close()
+            conf_service = self.get_service(args, non_parsed)
+            self._header(file)
+            YamlOutputFormatter(file).print_obj(conf_service)
 
     def dump_consumer(self, args, non_parsed):
-        path = '/Users/avkazantsev/Desktop/work/kongctl/consumers/'
+        path = './consumers/'
         if not os.path.isdir(path):
             os.mkdir(path)
 
@@ -563,9 +562,7 @@ class YamlConfigResource(BaseResource):
 
         file_path = path + file_name + '.yml'
         file = open(file_path, 'w')
-        sys.stdout = file
-        self.formatter.print_obj(consumer)
-        sys.stdout.close()
+        YamlOutputFormatter(file).print_obj(consumer)
 
     def build_parser(self, sb_config):
         service_config = sb_config.add_parser('service')
@@ -587,6 +584,6 @@ class YamlConfigResource(BaseResource):
         dump_consumer.set_defaults(func=self.dump_consumer)
         dump_consumer.add_argument("consumer", default=None, nargs='?', help='consumer id or None {username or id}')
 
-    def _header(self):
-        self.formatter._write('_format_version: \"1.1\"')
-        self.formatter._write('\n\n')
+    def _header(self, file=sys.stdout):
+        print('_format_version: \"1.1\"', file=file)
+        print(file=file)
