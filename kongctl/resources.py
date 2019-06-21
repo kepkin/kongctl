@@ -2,6 +2,7 @@ import json
 import sys
 import collections
 import os
+import yaml
 from .yaml_formatter import YamlOutputFormatter
 
 _get_verison = None
@@ -96,6 +97,7 @@ class BaseResource(object):
 
     def create(self, args, non_parsed):
         url = self._build_resource_url('create', args, non_parsed)
+        print(url)
         data = self.load_data_from_stdin()
         r = self.http_client.post(url, json=data)
         self.formatter.print_obj(r.json())
@@ -283,8 +285,10 @@ class PluginResource(BaseResource):
             else:
                 data['route'] = {'id': route_ref.id_getter(args.route)}
 
+        self.formatter.print_obj(data)
+        print(url)
         r = self.http_client.post(url, json=data)
-        self.formatter.print_obj(r.json())
+
 
     def build_parser(self, sb_list, sb_get, sb_create, sb_update, sb_delete):
         list_ = sb_list.add_parser(self.resource_name)
@@ -468,7 +472,7 @@ class YamlConfigResource(BaseResource):
         for n in data['routes']:
             route = collections.OrderedDict()
             route['name'] = n['id']
-            route['paths'] = n['paths']
+            route['paths'] = n['paths'] if n['paths'] else None
             service['routes'].append(route)
 
         config_obj['services'].append(service)
@@ -477,8 +481,11 @@ class YamlConfigResource(BaseResource):
         for n in data['plugins']:
             plugin = collections.OrderedDict()
             plugin['name'] = n['name']
-            plugin['route'] = n['route']
-            plugin['config'] = n['config']
+            # plugin['route'] = n['route']
+            plugin['protocols'] = n['protocols']
+            plugin['run_on'] = n['run_on']
+            if n['config']:
+                plugin['config'] = n['config']
             config_obj['plugins'].append(plugin)
 
         return config_obj
@@ -587,3 +594,106 @@ class YamlConfigResource(BaseResource):
     def _header(self, file=sys.stdout):
         print('_format_version: \"1.1\"', file=file)
         print(file=file)
+
+class EnsureResource(BaseResource):
+    def __init__(self, http_client, formatter):
+        super().__init__(http_client, formatter, 'services')
+
+    def service_check_update(self, data, args, non_parsed):
+        service_res = ServiceResource(self.http_client, self.formatter)
+
+        args.service = data['name']
+        current_service = service_res._list(args, non_parsed)
+
+        delete = False
+        for old in current_service:
+            if old['name'] == data['name']:
+                delete = True
+                if "{protocol}://{host}:{port}".format(**old) == data['url']:
+                    return False
+        if delete:
+            service_res.delete(args, non_parsed)
+        return True
+
+    def route_update(self, routes, url, args, non_parsed):
+        route_res = RouteResource(self.http_client, self.formatter)
+
+        current_routes = list(route_res._list(args, non_parsed))
+        name_list = list()
+        for new in routes:
+            for old in current_routes:
+                if new['name'] == old['name'] and old['paths'] == new['paths']:
+                    name_list.append(old['name'])
+
+        for old in current_routes:
+            if old['name'] not in name_list:
+                args.route = old['id']
+                route_res.delete(args, non_parsed)
+
+        for new in routes:
+            if new['name'] not in name_list and new['paths']:
+                self.formatter.print_obj(new)
+                # print(url)
+                self.http_client.post(url, data=new)
+
+        print(name_list)
+
+    def plugin_update(self, plugins, url, args, non_parsed):
+        plugin_res = PluginResource(self.http_client, self.formatter)
+
+        current_plugins = list(plugin_res._list(args, non_parsed))
+        name_list = list()
+        for new in plugins:
+            for old in current_plugins:
+                if new['name'] == old['name'] and old['protocols'] == new['protocols'] and old['run_on'] == new['run_on']:
+                    if 'config' in new and json.dumps(old['config'], sort_keys=True) == json.dumps(new['config'], sort_keys=True):
+                        name_list.append(old['name'])
+
+        for old in current_plugins:
+            if old['name'] not in name_list:
+                args.plugin = old['id']
+                plugin_res.delete(args, non_parsed)
+
+        for new in plugins:
+            if new['name'] not in name_list:
+                self.formatter.print_obj(new)
+                self.http_client.post(url, json=new)
+
+        print(name_list)
+
+    def prepare_required(self, conf, args, non_parsed):
+        service = conf['services'][0]
+        plugins = conf['plugins']
+        print(service['name'])
+
+        url = self._build_resource_url('create')
+
+        data = dict()
+        data['name'] = service['name']
+        data['url'] = service['url']
+        if self.service_check_update(data, args, non_parsed):
+            self.http_client.post(url, data=data)
+
+        url += '/' + ServiceResource(self.http_client, self.formatter).id_getter(data['name'])
+
+        self.route_update(service['routes'], url + '/routes', args, non_parsed)
+        self.plugin_update(plugins, url + '/plugins', args, non_parsed)
+
+    def get_yaml_file(self, args, non_parsed):
+        files = list()
+        if os.path.isdir(args.path):
+            files = os.listdir(args.path)
+            os.chdir(args.path)
+        else:
+            files.append(args.path)
+
+        for file in files:
+            if os.path.isfile(file):
+                print(file)
+                f = open(file, 'r')
+                conf = yaml.safe_load(f.read())
+                self.prepare_required(conf, args, non_parsed)
+
+    def build_parser(self, ensure):
+        ensure.set_defaults(func=self.get_yaml_file)
+        ensure.add_argument('path', help='file or directory yaml config')
