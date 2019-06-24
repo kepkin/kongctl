@@ -97,7 +97,6 @@ class BaseResource(object):
 
     def create(self, args, non_parsed):
         url = self._build_resource_url('create', args, non_parsed)
-        print(url)
         data = self.load_data_from_stdin()
         r = self.http_client.post(url, json=data)
         self.formatter.print_obj(r.json())
@@ -472,7 +471,8 @@ class YamlConfigResource(BaseResource):
         for n in data['routes']:
             route = collections.OrderedDict()
             route['name'] = n['id']
-            route['paths'] = n['paths'] if n['paths'] else None
+            if n['paths']:
+                route['paths'] = n['paths']
             service['routes'].append(route)
 
         config_obj['services'].append(service)
@@ -605,77 +605,83 @@ class EnsureResource(BaseResource):
         args.service = data['name']
         current_service = service_res._list(args, non_parsed)
 
-        delete = False
+        status = 'create'
         for old in current_service:
             if old['name'] == data['name']:
-                delete = True
-                if "{protocol}://{host}:{port}".format(**old) == data['url']:
-                    return False
-        if delete:
-            service_res.delete(args, non_parsed)
-        return True
+                status = 'change'
+
+                old_url = "{protocol}://{host}:{port}".format(**old)
+                old_url += str(old['path']) if old['path'] != None else ''
+                if old_url == data['url']:
+                    return 'break'
+        return status
 
     def route_update(self, routes, url, args, non_parsed):
         route_res = RouteResource(self.http_client, self.formatter)
 
         current_routes = list(route_res._list(args, non_parsed))
-        name_list = list()
+        ident_list = list()
+        old_list = list()
         for new in routes:
             for old in current_routes:
-                if new['name'] == old['name'] and old['paths'] == new['paths']:
-                    name_list.append(old['name'])
-
-        for old in current_routes:
-            if old['name'] not in name_list:
-                args.route = old['id']
-                route_res.delete(args, non_parsed)
+                if old['name'] not in old_list:
+                    old_list.append(old['name'])
+                if new['name'] == old['name']:
+                    if 'paths' in old and 'paths' in new and old['paths'] == new['paths']:
+                        ident_list.append(old['name'])
 
         for new in routes:
-            if new['name'] not in name_list and new['paths']:
-                self.formatter.print_obj(new)
-                # print(url)
-                self.http_client.post(url, data=new)
-
-        print(name_list)
+            if new['name'] not in ident_list and 'paths' in new:
+                if new['name'] in old_list:
+                    for old in current_routes:
+                        if old['name'] == new['name']:
+                            route_id = '/routes/' + old['id']
+                    self.http_client.patch(route_id, data=new)
+                else:
+                    self.http_client.post(url, data=new)
 
     def plugin_update(self, plugins, url, args, non_parsed):
         plugin_res = PluginResource(self.http_client, self.formatter)
 
         current_plugins = list(plugin_res._list(args, non_parsed))
-        name_list = list()
+        ident_list = list()
+        old_list = list()
         for new in plugins:
             for old in current_plugins:
+                if old['name'] not in old_list:
+                    old_list.append(old['name'])
                 if new['name'] == old['name'] and old['protocols'] == new['protocols'] and old['run_on'] == new['run_on']:
-                    if 'config' in new and json.dumps(old['config'], sort_keys=True) == json.dumps(new['config'], sort_keys=True):
-                        name_list.append(old['name'])
-
-        for old in current_plugins:
-            if old['name'] not in name_list:
-                args.plugin = old['id']
-                plugin_res.delete(args, non_parsed)
+                    if 'config' in new and 'config' in old:
+                        if json.dumps(old['config'], sort_keys=True) == json.dumps(new['config'], sort_keys=True):
+                            ident_list.append(old['name'])
 
         for new in plugins:
-            if new['name'] not in name_list:
-                self.formatter.print_obj(new)
-                self.http_client.post(url, json=new)
-
-        print(name_list)
+            if new['name'] not in ident_list:
+                if new['name'] in old_list:
+                    for old in current_plugins:
+                        if old['name'] == new['name']:
+                            plugin_id = '/' + old['id']
+                    self.http_client.patch(url + plugin_id, json=new)
+                else:
+                    self.http_client.post(url, json=new)
 
     def prepare_required(self, conf, args, non_parsed):
         service = conf['services'][0]
         plugins = conf['plugins']
-        print(service['name'])
-
-        url = self._build_resource_url('create')
 
         data = dict()
         data['name'] = service['name']
         data['url'] = service['url']
-        if self.service_check_update(data, args, non_parsed):
-            self.http_client.post(url, data=data)
+
+        url = self._build_resource_url('create')
+        service_status = self.service_check_update(data, args, non_parsed)
+
+        if service_status in {'change'}:
+            self.http_client.patch(url + '/' + ServiceResource(self.http_client, self.formatter).id_getter(data['name']), data=data)
+        elif service_status in {'create'}:
+            self.http_client.post(self._build_resource_url('create'), data=data)
 
         url += '/' + ServiceResource(self.http_client, self.formatter).id_getter(data['name'])
-
         self.route_update(service['routes'], url + '/routes', args, non_parsed)
         self.plugin_update(plugins, url + '/plugins', args, non_parsed)
 
