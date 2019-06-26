@@ -54,7 +54,6 @@ class HttpClient(object):
             print("Making {} call: {}".format(method, self.endpoint + url, args, kwargs))
 
         kwargs['timeout'] = self.timeout
-        # print(self.endpoint + url)
         res = self.session.request(method, self.endpoint + url, *args, **kwargs)
         if self.verbose:
             json_body = None
