@@ -283,9 +283,8 @@ class PluginResource(BaseResource):
             else:
                 data['route'] = {'id': route_ref.id_getter(args.route)}
 
-        self.formatter.print_obj(data)
-        print(url)
         r = self.http_client.post(url, json=data)
+        self.formatter.print_obj(r.json())
 
 
     def build_parser(self, sb_list, sb_get, sb_create, sb_update, sb_delete):
@@ -455,16 +454,17 @@ class YamlConfigResource(BaseResource):
     def id_getter(self, resource_name):
         r = self.http_client.get('/{}/{}'.format('services', resource_name))
         return r.json()['id']
-    def del_config_attr(self, type, conf):
+
+    def del_config_attr(self, resource_type, conf):
         data = dict(conf)
         data.pop('service', None)
         data.pop('created_at', None)
         data.pop('id', None)
 
-        if type in '{route}':
+        if resource_type in '{route}':
             data.pop('preserve_host', None)
             data.pop('updated_at', None)
-        elif type in '{plugin}':
+        elif resource_type in '{plugin}':
             if not data['tags']:
                 data.pop('tags', None)
         return data
@@ -484,7 +484,8 @@ class YamlConfigResource(BaseResource):
             route = collections.OrderedDict()
             route.update(n)
             route = self.del_config_attr('route', route)
-            route['name'] = n['id']
+            if not route['name']:
+                route['name'] = n['id']
             service['routes'].append(route)
 
         config_obj['services'].append(service)
@@ -531,11 +532,9 @@ class YamlConfigResource(BaseResource):
             data['username'] = consumer['username']
 
             data['keyauth_credentials'] = list()
-            key = dict()
             args.consumer = data['username']
-            for n in KeyAuthResource(self.http_client, self.formatter)._list(args, non_parsed):
-                key['key'] = n['key']
-                data['keyauth_credentials'].append(key)
+            for key in KeyAuthResource(self.http_client, self.formatter)._list(args, non_parsed):
+                data['keyauth_credentials'].append({"key": key['key']})
 
             consumer_conf['consumers'].append(data)
 
@@ -615,18 +614,31 @@ class EnsureResource(BaseResource):
     def __init__(self, http_client, formatter):
         super().__init__(http_client, formatter, 'services')
 
+    def id_plugin_route(self, plugin, args, non_parsed):
+        if plugin['route']:
+            current_routes = RouteResource(self.http_client, self.formatter)._list(args, non_parsed)
+            for route in current_routes:
+                if route['name'] == plugin['route']['id']:
+                    id = route['id']
+            return id
+
     def service_update(self, data, args, non_parsed):
         service_res = ServiceResource(self.http_client, self.formatter)
 
         args.service = data['name']
-        current_service = service_res._list(args, non_parsed)
 
         url = service_res._build_resource_url('create')
-        for old in current_service:
-            if old['name'] == data['name']:
+        try:
+            current_service = service_res._get(args, non_parsed)
+        except RuntimeError:
+            current_service = None
+
+        if current_service:
+            if current_service['name'] == data['name']:
                 url += '/' + service_res.id_getter(data['name'])
-                old_url = "{protocol}://{host}:{port}".format(**old)
-                old_url += str(old['path']) if old['path'] != None else ''
+
+                old_url = "{protocol}://{host}:{port}".format(**current_service)
+                old_url += str(current_service['path']) if current_service['path'] != None else ''
                 if old_url == data['url']:
                     return url
                 self.http_client.patch(url, data=data)
@@ -664,14 +676,6 @@ class EnsureResource(BaseResource):
                     self.http_client.patch(route_id, json=new)
                 else:
                     self.http_client.post(url, json=new)
-
-    def id_plugin_route(self, plugin, args, non_parsed):
-        if plugin['route']:
-            current_routes = RouteResource(self.http_client, self.formatter)._list(args, non_parsed)
-            for route in current_routes:
-                if route['name'] == plugin['route']['id']:
-                    id = route['id']
-            return id
 
     def plugin_update(self, plugins, url, args, non_parsed):
         plugin_res = PluginResource(self.http_client, self.formatter)
