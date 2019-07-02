@@ -540,6 +540,17 @@ class YamlConfigResource(BaseResource):
 
         return consumer_conf
 
+    def get_plugin(self, args, non_parsed):
+        args.list_full = None
+        plugins = PluginResource(self.http_client, self.formatter)._list(args, non_parsed)
+        data = list()
+
+        for plug in plugins:
+            if not plug['service'] and not plug['route']:
+                data.append(plug)
+
+        return data
+
     def yaml_consumer(self, args, non_parsed):
         self.formatter.print_obj(self.get_consumer(args, non_parsed))
 
@@ -547,8 +558,11 @@ class YamlConfigResource(BaseResource):
         self._header()
         self.formatter.print_obj(self.get_service(args, non_parsed))
 
+    def yaml_plugin(self, args, non_parsed):
+        self.formatter.print_obj(self.get_plugin(args, non_parsed))
+
     def dump_service(self, args, non_parsed):
-        path = './services/'
+        path = './config/services/'
         data = dict()
 
         if args.service:
@@ -560,7 +574,7 @@ class YamlConfigResource(BaseResource):
             service_list = ServiceResource(self.http_client, self.formatter)._list(args, non_parsed)
 
         if not os.path.isdir(path):
-            os.mkdir(path)
+            os.makedirs(path)
 
         for service in service_list:
             args.service = service['name']
@@ -571,9 +585,9 @@ class YamlConfigResource(BaseResource):
             YamlOutputFormatter(file).print_obj(conf_service)
 
     def dump_consumer(self, args, non_parsed):
-        path = './consumers/'
+        path = './config/consumers/'
         if not os.path.isdir(path):
-            os.mkdir(path)
+            os.makedirs(path)
 
         consumer = self.get_consumer(args, non_parsed)
         if not args.consumer:
@@ -585,6 +599,18 @@ class YamlConfigResource(BaseResource):
         file = open(file_path, 'w')
         YamlOutputFormatter(file).print_obj(consumer)
 
+    def dump_plugin(self, args, non_parsed):
+        plugins = self.get_plugin(args, non_parsed)
+
+        if plugins:
+            path = './config/plugins/'
+            if not os.path.isdir(path):
+                os.makedirs(path)
+            file_path = path + 'plugins.yml'
+            file = open(file_path, 'w')
+            YamlOutputFormatter(file).print_obj(plugins)
+
+
     def build_parser(self, sb_config):
         service_config = sb_config.add_parser('service')
         service_config.set_defaults(func=self.yaml_service)
@@ -594,8 +620,20 @@ class YamlConfigResource(BaseResource):
         consumer_config.set_defaults(func=self.yaml_consumer)
         consumer_config.add_argument("consumer", default=None, nargs='?', help='consumer id {username or id}')
 
+        plugin_config = sb_config.add_parser('plugin')
+        plugin_config.set_defaults(func=self.yaml_plugin)
+        #@TODO: ambigous arguments.. should be deleted
+        plugin_config.add_argument("-s", "--service", default=None, nargs='?', help='service id or None {username or id}')
+        plugin_config.add_argument("-r", "--route", default=None, nargs='?', help='route id or None {username or id}')
+
         dump = sb_config.add_parser('dump')
         sb_dump = dump.add_subparsers()
+
+        dump_plugins = sb_dump.add_parser('plugin')
+        dump_plugins.set_defaults(func=self.dump_plugin)
+        dump_plugins.add_argument("-s", "--service", default=None, nargs='?', help='service id or None {username or id}')
+        dump_plugins.add_argument("-r", "--route", default=None, nargs='?', help='route id or None {username or id}')
+
 
         dump_service = sb_dump.add_parser('service')
         dump_service.set_defaults(func=self.dump_service)
@@ -710,7 +748,7 @@ class EnsureResource(BaseResource):
                 else:
                     self.http_client.post(url, json=new)
 
-    def prepare_required(self, conf, args, non_parsed):
+    def service_required(self, conf, args, non_parsed):
         service = conf['services'][0]
         routes = service['routes']
         plugins = conf['plugins']
@@ -723,21 +761,50 @@ class EnsureResource(BaseResource):
         self.route_update(routes, url + '/routes', args, non_parsed)
         self.plugin_update(plugins, url + '/plugins', args, non_parsed)
 
+    def plugin_required(self, conf, args, non_parsed):
+        plugin_res = PluginResource(self.http_client, self.formatter)
+
+        url = plugin_res._build_resource_url('create', args, non_parsed) + '/'
+        for plugin in conf:
+            self.http_client.put(url + plugin['id'], json=plugin)
+
+    def consumer_required(self, conf, args, non_parsed):
+        consumer_res = ConsumerResource(self.http_client, self.formatter)
+        consumers = conf['consumers']
+
+        url = consumer_res._build_resource_url('create', args, non_parsed) + '/'
+        for consumer in consumers:
+            user = dict()
+            key = dict()
+
+            user['username'] = consumer['username']
+            self.http_client.put(url + consumer['username'], json=user)
+            if consumer['keyauth_credentials']:
+                key['key'] = consumer['keyauth_credentials'][0]['key']
+                self.http_client.put(url + consumer['username'] + '/key-auth/' + key['key'], json=key)
+
     def get_yaml_file(self, args, non_parsed):
-        files = list()
+        folder = list()
         if os.path.isdir(args.path):
-            files = os.listdir(args.path)
+            folder = os.listdir(args.path)
             os.chdir(args.path)
         else:
-            files.append(args.path)
+            folder.append(args.path)
 
-        for file in files:
-            if os.path.isfile(file):
+        for dr in folder:
+            sub_dr = os.listdir(dr)
+            for file in sub_dr:
                 print(file)
-                f = open(file, 'r')
+                f = open(dr + '/' + file, 'r')
                 conf = yaml.safe_load(f.read())
-                self.prepare_required(conf, args, non_parsed)
+                if dr in '{services}':
+                    self.service_required(conf, args, non_parsed)
+                elif dr in '{plugins}':
+                    self.plugin_required(conf, args, non_parsed)
+                elif dr in '{consumers}':
+                    self.consumer_required(conf, args, non_parsed)
+
 
     def build_parser(self, ensure):
         ensure.set_defaults(func=self.get_yaml_file)
-        ensure.add_argument('path', help='file or directory yaml config')
+        ensure.add_argument('path', help='directory yaml config')
