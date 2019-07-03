@@ -6,9 +6,11 @@ import yaml
 from .yaml_formatter import YamlOutputFormatter
 
 _get_verison = None
+
+
 def get_version(http_client):
     global _get_verison
-    if _get_verison != None:
+    if _get_verison is not None:
         return _get_verison
 
     r = http_client.get('/')
@@ -39,11 +41,12 @@ class BaseResource(object):
     def id_getter(self, name):
         raise NotImplementedError()
 
-    def load_data_from_stdin(self):
+    @staticmethod
+    def load_data_from_stdin():
         data = sys.stdin.read()
         return json.loads(data)
 
-    def _build_resource_url(self, op, args=None, non_parsed=None, id_=None):
+    def build_resource_url(self, op, args=None, non_parsed=None, id_=None):
         if op == 'get_by_id':
             return '/{}/{}/'.format(self.resource_name, id_)
         elif op == 'list':
@@ -54,7 +57,7 @@ class BaseResource(object):
             return '/{}'.format(self.resource_name)
 
     def _list(self, args, non_parsed):
-        next_url = self._build_resource_url('list', args, non_parsed)
+        next_url = self.build_resource_url('list', args, non_parsed)
         while next_url:
             r = self.http_client.get(next_url)
             data = r.json()
@@ -73,20 +76,19 @@ class BaseResource(object):
             else:
                 self.short_formatter(resource)
 
-    def get_by_id(self, id):
+    def get_by_id(self, id_):
         self.ensure_cache()
-        resource = self.cache.get(id)
+        resource = self.cache.get(id_)
 
         if resource is None:
-            url = self._build_resource_url('get_by_id', None, None, id_=id)
-            url = '/{}/{}'.format(self.resource_name, id)
+            url = '/{}/{}'.format(self.resource_name, id_)
             r = self.http_client.get(url)
             return r.json()
 
         return resource
 
     def _get(self, args, non_parsed):
-        url = self._build_resource_url('get', args, non_parsed)
+        url = self.build_resource_url('get', args, non_parsed)
         r = self.http_client.get(url)
         return r.json()
 
@@ -95,20 +97,20 @@ class BaseResource(object):
         self.formatter.print_obj(r)
 
     def create(self, args, non_parsed):
-        url = self._build_resource_url('create', args, non_parsed)
+        url = self.build_resource_url('create', args, non_parsed)
         data = self.load_data_from_stdin()
         r = self.http_client.post(url, json=data)
         self.formatter.print_obj(r.json())
 
     def update(self, args, non_parsed):
-        url = self._build_resource_url('update', args, non_parsed)
+        url = self.build_resource_url('update', args, non_parsed)
         data = self.load_data_from_stdin()
         r = self.http_client.patch(url, json=data)
         self.formatter.print_obj(r.json())
 
     def delete(self, args, non_parsed):
-        url = self._build_resource_url('delete', args, non_parsed)
-        r = self.http_client.delete(url)
+        url = self.build_resource_url('delete', args, non_parsed)
+        self.http_client.delete(url)
 
 
 class ServiceResource(BaseResource):
@@ -157,7 +159,6 @@ class RouteResource(BaseResource):
         ref = ServiceResource(self.http_client, self.formatter)
         self.formatter.print_pair(resource['id'], ref.get_by_id(resource['service']['id'])['name'], indent=indent)
 
-        ops = []
         for h in hosts:
             for p in paths:
                 self.formatter.println(h + p, indent=indent + 1)
@@ -168,14 +169,14 @@ class RouteResource(BaseResource):
         r = self.http_client.get('/{}/{}'.format("routes", resource_name))
         return r.json()['id']
 
-    def _build_resource_url(self, op, args, non_parsed, **kwargs):
+    def build_resource_url(self, op, args, non_parsed, **kwargs):
         if op in {'list'} and args and args.service is not None:
             return '/{}/{}/{}/'.format('services', args.service, self.resource_name)
         else:
-            return super()._build_resource_url(op, args, non_parsed, **kwargs)
+            return super().build_resource_url(op, args, non_parsed, **kwargs)
 
     def create(self, args, non_parsed):
-        url = self._build_resource_url('create', args, non_parsed)
+        url = self.build_resource_url('create', args, non_parsed)
 
         ref = ServiceResource(self.http_client, self.formatter)
         service_id = ref.id_getter(args.service)
@@ -242,7 +243,8 @@ class PluginResource(BaseResource):
         if route_id:
             route_res = route_ref.get_by_id(route_id)
 
-        self.formatter.print_header("{}: {} (service {}) {}".format(resource['id'], resource['name'], service_name, 'on' if resource['enabled'] else 'off'))
+        self.formatter.print_header("{}: {} (service {}) {}".format(resource['id'], resource['name'], service_name,
+                                                                    'on' if resource['enabled'] else 'off'))
         self.formatter.print_pair('Service', service_name, indent=1)
 
         if route_res:
@@ -255,16 +257,16 @@ class PluginResource(BaseResource):
         r = self.http_client.get('/{}/{}'.format("plugins", resource_name))
         return r.json()['id']
 
-    def _build_resource_url(self, op, args, non_parsed, **kwargs):
+    def build_resource_url(self, op, args, non_parsed, **kwargs):
         if op in {'list'} and args and args.service is not None:
             return '/{}/{}/{}/'.format('services', args.service, self.resource_name)
         elif op in {'list'} and args and args.route is not None:
             return '/{}/{}/{}/'.format('routes', args.route, self.resource_name)
         else:
-            return super()._build_resource_url(op, args, non_parsed, **kwargs)
+            return super().build_resource_url(op, args, non_parsed, **kwargs)
 
     def create(self, args, non_parsed):
-        url = self._build_resource_url('create', args, non_parsed)
+        url = self.build_resource_url('create', args, non_parsed)
 
         service_ref = ServiceResource(self.http_client, self.formatter)
         route_ref = RouteResource(self.http_client, self.formatter)
@@ -285,7 +287,6 @@ class PluginResource(BaseResource):
 
         r = self.http_client.post(url, json=data)
         self.formatter.print_obj(r.json())
-
 
     def build_parser(self, sb_list, sb_get, sb_create, sb_update, sb_delete):
         list_ = sb_list.add_parser(self.resource_name)
@@ -324,13 +325,13 @@ class PluginSchemaResource(BaseResource):
         raise NotImplemented()
 
     def _list(self, args, non_parsed):
-        r = self.http_client.get(self._build_resource_url('list', args, non_parsed))
+        r = self.http_client.get(self.build_resource_url('list', args, non_parsed))
         data = r.json()
 
         for resource in data['enabled_plugins']:
             yield resource
 
-    def _build_resource_url(self, op, args=None, non_parsed=None, id_=None):
+    def build_resource_url(self, op, args=None, non_parsed=None, id_=None):
         if op == 'get':
             return '/plugins/schema/{}'.format(args.plugin)
         elif op == 'list':
@@ -359,7 +360,7 @@ class ConsumerResource(BaseResource):
         return r.json()['id']
 
     def create(self, args, non_parsed):
-        url = self._build_resource_url('create', args, non_parsed)
+        url = self.build_resource_url('create', args, non_parsed)
 
         data = self.load_data_from_stdin()
         data['username'] = args.username
@@ -397,7 +398,7 @@ class KeyAuthResource(BaseResource):
     def short_formatter(self, resource):
         self.formatter.print_pair('key', resource['key'], indent=0)
 
-    def _build_resource_url(self, op, args=None, non_parsed=None, id_=None):
+    def build_resource_url(self, op, args=None, non_parsed=None, id_=None):
         if op == 'get_by_id':
             raise NotImplemented()
         elif op == 'list':
@@ -446,6 +447,8 @@ class YamlConfigResource(BaseResource):
             lst = RouteResource(self.http_client, self.formatter)
         elif resource_name == 'plugins':
             lst = PluginResource(self.http_client, self.formatter)
+        else:
+            raise RuntimeError("Unsupported resource: {}".format(resource_name))
 
         for resource in lst._list(args, non_parsed):
             data.append(resource)
@@ -455,7 +458,8 @@ class YamlConfigResource(BaseResource):
         r = self.http_client.get('/{}/{}'.format('services', resource_name))
         return r.json()['id']
 
-    def del_config_attr(self, resource_type, conf):
+    @staticmethod
+    def del_config_attr(resource_type, conf):
         data = dict(conf)
         data.pop('service', None)
         data.pop('created_at', None)
@@ -477,7 +481,7 @@ class YamlConfigResource(BaseResource):
         service['name'] = data['service']['name']
         service['url'] = "{protocol}://{host}:{port}".format(**data['service'])
 
-        service['url'] += str(data['service']['path']) if data['service']['path'] != None else ''
+        service['url'] += str(data['service']['path']) if data['service']['path'] is not None else ''
 
         service['routes'] = list()
         for n in data['routes']:
@@ -610,7 +614,6 @@ class YamlConfigResource(BaseResource):
             file = open(file_path, 'w')
             YamlOutputFormatter(file).print_obj(plugins)
 
-
     def build_parser(self, sb_config):
         service_config = sb_config.add_parser('service')
         service_config.set_defaults(func=self.yaml_service)
@@ -622,8 +625,9 @@ class YamlConfigResource(BaseResource):
 
         plugin_config = sb_config.add_parser('plugin')
         plugin_config.set_defaults(func=self.yaml_plugin)
-        #@TODO: ambigous arguments.. should be deleted
-        plugin_config.add_argument("-s", "--service", default=None, nargs='?', help='service id or None {username or id}')
+        # @TODO: ambigous arguments.. should be deleted
+        plugin_config.add_argument("-s", "--service", default=None, nargs='?',
+                                   help='service id or None {username or id}')
         plugin_config.add_argument("-r", "--route", default=None, nargs='?', help='route id or None {username or id}')
 
         dump = sb_config.add_parser('dump')
@@ -631,9 +635,9 @@ class YamlConfigResource(BaseResource):
 
         dump_plugins = sb_dump.add_parser('plugin')
         dump_plugins.set_defaults(func=self.dump_plugin)
-        dump_plugins.add_argument("-s", "--service", default=None, nargs='?', help='service id or None {username or id}')
+        dump_plugins.add_argument("-s", "--service", default=None, nargs='?',
+                                  help='service id or None {username or id}')
         dump_plugins.add_argument("-r", "--route", default=None, nargs='?', help='route id or None {username or id}')
-
 
         dump_service = sb_dump.add_parser('service')
         dump_service.set_defaults(func=self.dump_service)
@@ -643,9 +647,10 @@ class YamlConfigResource(BaseResource):
         dump_consumer.set_defaults(func=self.dump_consumer)
         dump_consumer.add_argument("consumer", default=None, nargs='?', help='consumer id or None {username or id}')
 
-    def _header(self, file=sys.stdout):
-        print('_format_version: \"1.1\"', file=file)
-        print(file=file)
+    @staticmethod
+    def _header(file=sys.stdout):
+        file.write('_format_version: \"1.1\"')
+        file.write('\n\n')
 
 
 class EnsureResource(BaseResource):
@@ -657,15 +662,16 @@ class EnsureResource(BaseResource):
             current_routes = RouteResource(self.http_client, self.formatter)._list(args, non_parsed)
             for route in current_routes:
                 if route['name'] == plugin['route']['id']:
-                    id = route['id']
-            return id
+                    return route['id']
+
+        raise RuntimeError("Can't find such route {}".format(plugin['route']['id']))
 
     def service_update(self, data, args, non_parsed):
         service_res = ServiceResource(self.http_client, self.formatter)
 
         args.service = data['name']
 
-        url = service_res._build_resource_url('create')
+        url = service_res.build_resource_url('create')
         try:
             current_service = service_res._get(args, non_parsed)
         except RuntimeError:
@@ -676,7 +682,7 @@ class EnsureResource(BaseResource):
                 url += '/' + service_res.id_getter(data['name'])
 
                 old_url = "{protocol}://{host}:{port}".format(**current_service)
-                old_url += str(current_service['path']) if current_service['path'] != None else ''
+                old_url += str(current_service['path']) if current_service['path'] is not None else ''
                 if old_url == data['url']:
                     return url
                 self.http_client.patch(url, data=data)
@@ -684,6 +690,13 @@ class EnsureResource(BaseResource):
 
         self.http_client.post(url, data=data)
         return url + '/' + service_res.id_getter(data['name'])
+
+    @staticmethod
+    def find_route_url(current_routes, route_name):
+        for old in current_routes:
+            if old['name'] == route_name:
+                return '/routes/' + old['id']
+        return None
 
     def route_update(self, routes, url, args, non_parsed):
         route_res = RouteResource(self.http_client, self.formatter)
@@ -706,14 +719,25 @@ class EnsureResource(BaseResource):
                 route_res.delete(args, non_parsed)
 
         for new in routes:
-            if new['name'] not in ident_list:
-                if new['name'] in old_list:
-                    for old in current_routes:
-                        if old['name'] == new['name']:
-                            route_id = '/routes/' + old['id']
-                    self.http_client.patch(route_id, json=new)
-                else:
-                    self.http_client.post(url, json=new)
+            if new['name'] in ident_list:
+                continue
+
+            if new['name'] in old_list:
+                route_id = self.find_route_url(current_routes, new['name'])
+
+                if route_id is None:
+                    raise RuntimeError("Can't find old route: {}".format(new['name']))
+
+                self.http_client.patch(route_id, json=new)
+            else:
+                self.http_client.post(url, json=new)
+
+    @staticmethod
+    def find_plugin_url(current_plugins, plugin_name):
+        for old in current_plugins:
+            if old['name'] == plugin_name:
+                return '/plugins/' + old['id']
+        return None
 
     def plugin_update(self, plugins, url, args, non_parsed):
         plugin_res = PluginResource(self.http_client, self.formatter)
@@ -739,14 +763,18 @@ class EnsureResource(BaseResource):
                 plugin_res.delete(args, non_parsed)
 
         for new in plugins:
-            if new['name'] not in ident_list:
-                if new['name'] in old_list:
-                    for old in current_plugins:
-                        if old['name'] == new['name']:
-                            plugin_id = '/' + old['id']
-                    self.http_client.patch(url + plugin_id, json=new)
-                else:
-                    self.http_client.post(url, json=new)
+            if new['name'] in ident_list:
+                continue
+
+            if new['name'] in old_list:
+                plugin_id = self.find_plugin_url(current_plugins, new['name'])
+
+                if plugin_id is None:
+                    raise RuntimeError("Can't find old plugin: {}".format(new['name']))
+
+                self.http_client.patch(plugin_id, json=new)
+            else:
+                self.http_client.post(url, json=new)
 
     def service_required(self, conf, args, non_parsed):
         service = conf['services'][0]
@@ -764,7 +792,7 @@ class EnsureResource(BaseResource):
     def plugin_required(self, conf, args, non_parsed):
         plugin_res = PluginResource(self.http_client, self.formatter)
 
-        url = plugin_res._build_resource_url('create', args, non_parsed) + '/'
+        url = plugin_res.build_resource_url('create', args, non_parsed) + '/'
         for plugin in conf:
             self.http_client.put(url + plugin['id'], json=plugin)
 
@@ -772,7 +800,7 @@ class EnsureResource(BaseResource):
         consumer_res = ConsumerResource(self.http_client, self.formatter)
         consumers = conf['consumers']
 
-        url = consumer_res._build_resource_url('create', args, non_parsed) + '/'
+        url = consumer_res.build_resource_url('create', args, non_parsed) + '/'
         for consumer in consumers:
             user = dict()
             key = dict()
@@ -803,7 +831,6 @@ class EnsureResource(BaseResource):
                     self.plugin_required(conf, args, non_parsed)
                 elif dr in '{consumers}':
                     self.consumer_required(conf, args, non_parsed)
-
 
     def build_parser(self, ensure):
         ensure.set_defaults(func=self.get_yaml_file)

@@ -15,7 +15,7 @@ class JsonOutputFormatter(object):
         return self.indent_spacer_char * num
 
     @staticmethod
-    def _dummy_colored(string, *args, **kwargs):
+    def _dummy_colored(string, *_, **__):
         return string
 
     def print_obj(self, data, indent=0):

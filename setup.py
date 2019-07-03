@@ -1,18 +1,17 @@
 #!/usr/bin/env python
 # This is purely the result of trial and error.
 
-import sys
 import codecs
 
-from setuptools import setup, find_packages
-from setuptools.command.test import test as TestCommand
+from setuptools import find_packages
 from distutils.core import setup
 
 import kongctl
 
 install_requires = [
     'requests>=2.21.0',
-    'termcolor==1.1.0'
+    'termcolor==1.1.0',
+    'PyYAML>=5.1.1',
 ]
 
 
