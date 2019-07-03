@@ -13,7 +13,7 @@ def main():
     parser = argparse.ArgumentParser(description='Kong command line client for admin api.')
     parser.add_argument('--version', action='store_true', default=False, help='Get tool version')
 
-    def usage_func(args, *argsl, **kwargs):
+    def usage_func(args, *_, **__):
         if args.version:
             print(__version__)
             return
@@ -30,9 +30,10 @@ def main():
     update = sb.add_parser('update', help='Update resource')
     delete = sb.add_parser('delete', help='Delete resource')
     config = sb.add_parser('config', help='Config yaml resource')
+    ensure = sb.add_parser('ensure', help='Create config yaml')
 
     base_args, _ = parser.parse_known_args()
-    httpClient = HttpClient.build_from_args(base_args)
+    http_client = HttpClient.build_from_args(base_args)
     parser.add_argument('-y', '--yml', default=False, action='store_true', help='Yaml conversion')
 
     args, _ = parser.parse_known_args()
@@ -40,21 +41,24 @@ def main():
         formatter = YamlOutputFormatter()
     else:
         formatter = JsonOutputFormatter()
-    list_.add_argument('-f', dest="list_full", action='store_true', default=False, help='Get full description of resource')
+    list_.add_argument('-f', dest="list_full", action='store_true', default=False,
+                       help='Get full description of resource')
 
     sb_list = list_.add_subparsers()
     sb_get = get.add_subparsers()
     sb_create = create.add_subparsers()
     sb_update = update.add_subparsers()
     sb_delete = delete.add_subparsers()
+    sb_config = config.add_subparsers()
 
-    YamlConfigResource(httpClient, formatter).build_parser(config)
-    ServiceResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    RouteResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    PluginResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    PluginSchemaResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    ConsumerResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    KeyAuthResource(httpClient, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    EnsureResource(http_client, formatter).build_parser(ensure)
+    YamlConfigResource(http_client, formatter).build_parser(sb_config)
+    ServiceResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    RouteResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    PluginResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    PluginSchemaResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    ConsumerResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    KeyAuthResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
 
     args, non_parsed = parser.parse_known_args()
     try:

@@ -51,6 +51,10 @@ class YamlOutputFormatter(JsonOutputFormatter):
             self._print_obj(v, indent + 1, from_type=list)
 
     def print_dict(self, data, indent=0, from_type=None):
+        if len(data) == 0:
+            self._write('{}')
+            return
+
         keys = list(data.keys())
         not_first = False
         for k in keys:

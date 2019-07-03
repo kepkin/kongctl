@@ -1,3 +1,4 @@
 docutils
 wheel
 pycodestyle
+PyYAML

@@ -77,5 +77,8 @@ class HttpClient(object):
     def patch(self, *args, **kwargs):
         return self.request("patch", *args, **kwargs)
 
+    def put(self, *args, **kwargs):
+        return self.request("put", *args, **kwargs)
+
     def delete(self, *args, **kwargs):
         return self.request("delete", *args, **kwargs)
