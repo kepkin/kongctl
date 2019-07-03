@@ -473,7 +473,9 @@ class YamlConfigResource(BaseResource):
                 data.pop('tags', None)
         return data
 
-    def get_config(self, data):
+    def get_config(self, data, args, non_parsed):
+        route_res = RouteResource(self.http_client, self.formatter)
+
         config_obj = collections.OrderedDict()
         config_obj['services'] = list()
 
@@ -499,6 +501,13 @@ class YamlConfigResource(BaseResource):
             plugin = collections.OrderedDict()
             plugin['name'] = n['name']
             plugin['route'] = n['route']
+
+            if plugin['route']:
+                args.route = plugin['route'].pop('id')
+                route = route_res._get(args, non_parsed)
+
+                plugin['route']['name'] = route['name'] if route['name'] else route['id']
+
             plugin['protocols'] = n['protocols']
             plugin['run_on'] = n['run_on']
             if not n['config']:
@@ -516,7 +525,7 @@ class YamlConfigResource(BaseResource):
         data['routes'] = self.get_list(args, non_parsed, 'routes')
         data['plugins'] = self.get_list(args, non_parsed, 'plugins')
 
-        return self.get_config(data)
+        return self.get_config(data, args, non_parsed)
 
     def get_consumer(self, args, non_parsed):
         consumer_conf = dict()
@@ -661,10 +670,10 @@ class EnsureResource(BaseResource):
         if plugin['route']:
             current_routes = RouteResource(self.http_client, self.formatter)._list(args, non_parsed)
             for route in current_routes:
-                if route['name'] == plugin['route']['id']:
+                if route['name'] == plugin['route']['name']:
                     return route['id']
 
-        raise RuntimeError("Can't find such route {}".format(plugin['route']['id']))
+        raise RuntimeError("Can't find such route {}".format(plugin['route']['name']))
 
     def service_update(self, data, args, non_parsed):
         service_res = ServiceResource(self.http_client, self.formatter)
@@ -750,6 +759,7 @@ class EnsureResource(BaseResource):
         for new in plugins:
             if new['route']:
                 new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
+                new['route'].pop('name', None)
             for old in current_plugins:
                 if old['name'] == new['name'] not in old_list:
                     old_list.append(old['name'])
