@@ -24,7 +24,7 @@ class YamlOutputFormatter(JsonOutputFormatter):
 
     def print_str(self, data, indent=0):
         if data.count('\n') > 1:
-            data = self.indent_spacer_char*indent + data.replace('\n', '\n' + self.indent_spacer_char*indent)
+            data = self.indent_spacer_char * indent + data.replace('\n', '\n' + self.indent_spacer_char * indent)
             if data[-1] != '\n':
                 data = '|-\n' + data
             elif data[-2] == '\n':
