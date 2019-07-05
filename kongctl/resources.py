@@ -4,6 +4,7 @@ import collections
 import os
 import yaml
 from .yaml_formatter import YamlOutputFormatter
+from operator import itemgetter
 
 _get_verison = None
 
@@ -473,6 +474,13 @@ class YamlConfigResource(BaseResource):
                 data.pop('tags', None)
         return data
 
+    @staticmethod
+    def plugin_sort(plugin):
+        if plugin['route']:
+            if plugin['route']['name']:
+                return plugin['route']['name']
+        return ''
+
     def get_config(self, data, args, non_parsed):
         route_res = RouteResource(self.http_client, self.formatter)
 
@@ -494,6 +502,7 @@ class YamlConfigResource(BaseResource):
                 route['name'] = n['id']
             service['routes'].append(route)
 
+        service['routes'] = sorted(service['routes'], key=itemgetter('name'))
         config_obj['services'].append(service)
 
         config_obj['plugins'] = list()
@@ -517,10 +526,12 @@ class YamlConfigResource(BaseResource):
             plugin = self.del_config_attr('plugin', plugin)
             config_obj['plugins'].append(plugin)
 
+        config_obj['plugins'] = sorted(config_obj['plugins'], key=itemgetter('name'))
+        config_obj['plugins'] = sorted(config_obj['plugins'], key=self.plugin_sort)
         return config_obj
 
     def get_service(self, args, non_parsed):
-        data = dict()
+        data = collections.OrderedDict()
         data['service'] = self._get(args, non_parsed)
         data['routes'] = self.get_list(args, non_parsed, 'routes')
         data['plugins'] = self.get_list(args, non_parsed, 'plugins')
