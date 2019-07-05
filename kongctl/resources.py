@@ -476,10 +476,12 @@ class YamlConfigResource(BaseResource):
 
     @staticmethod
     def plugin_sort(plugin):
+        route_name = ""
         if plugin['route']:
             if plugin['route']['name']:
-                return plugin['route']['name']
-        return ''
+                route_name = plugin['route']['name']
+
+        return "{}-{}".format(plugin['name'], route_name)
 
     def get_config(self, data, args, non_parsed):
         route_res = RouteResource(self.http_client, self.formatter)
@@ -526,7 +528,6 @@ class YamlConfigResource(BaseResource):
             plugin = self.del_config_attr('plugin', plugin)
             config_obj['plugins'].append(plugin)
 
-        config_obj['plugins'] = sorted(config_obj['plugins'], key=itemgetter('name'))
         config_obj['plugins'] = sorted(config_obj['plugins'], key=self.plugin_sort)
         return config_obj
 
