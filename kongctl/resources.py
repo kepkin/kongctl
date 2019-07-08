@@ -5,6 +5,7 @@ import os
 import yaml
 from .yaml_formatter import YamlOutputFormatter
 from operator import itemgetter
+from urllib.parse import urlparse
 
 _get_verison = None
 
@@ -706,7 +707,17 @@ class EnsureResource(BaseResource):
                 old_url += str(current_service['path']) if current_service['path'] is not None else ''
                 if old_url == data['url']:
                     return url
-                self.http_client.patch(url, data=data)
+
+                u = urlparse(data['url'])
+                service = dict()
+
+                service['name'] = data['name']
+                service['protocol'] = u.scheme
+                service['host'] = u.netloc.replace(":" + str(u.port), '')
+                service['path'] = u.path
+                service['port'] = u.port
+
+                self.http_client.patch(url, data=service)
                 return url
 
         self.http_client.post(url, data=data)
