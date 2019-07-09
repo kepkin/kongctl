@@ -780,7 +780,7 @@ class EnsureResource(BaseResource):
         ident_list = list()
         old_list = list()
         for new in plugins:
-            if new['route']:
+            if new.get('route'):
                 new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
                 new['route'].pop('name', None)
             for old in current_plugins:
@@ -845,25 +845,46 @@ class EnsureResource(BaseResource):
                 self.http_client.put(url + consumer['username'] + '/key-auth/' + key['key'], json=key)
 
     def get_yaml_file(self, args, non_parsed):
+        services = []
+        plugins = []
+        consumers = []
+
         folder = list()
         if os.path.isdir(args.path):
             folder = os.listdir(args.path)
-            os.chdir(args.path)
-        else:
-            folder.append(args.path)
+            for dr in folder:
+                sub_dr = os.listdir(dr)
+                for file in sub_dr:
+                    print("DR", dr)
+                    full_path = os.path.join(args.path, dr, file)
+                    if dr in '{services}':
+                        services.append(full_path)
+                    elif dr in '{plugins}':
+                        plugins.append(full_path)
+                    elif dr in '{consumers}':
+                        consumers.append(full_path)
 
-        for dr in folder:
-            sub_dr = os.listdir(dr)
-            for file in sub_dr:
-                print(file)
-                f = open(dr + '/' + file, 'r')
-                conf = yaml.safe_load(f.read())
-                if dr in '{services}':
-                    self.service_required(conf, args, non_parsed)
-                elif dr in '{plugins}':
-                    self.plugin_required(conf, args, non_parsed)
-                elif dr in '{consumers}':
-                    self.consumer_required(conf, args, non_parsed)
+        else:
+            # @TODO: analyze magically what is it: service/plugin/consumer
+            services.append(args.path)
+
+        for path in services:
+            print("Processing: ", path)
+            f = open(path)
+            conf = yaml.safe_load(f.read())
+            self.service_required(conf, args, non_parsed)
+
+        for path in plugins:
+            print("Processing: ", path)
+            f = open(path)
+            conf = yaml.safe_load(f.read())
+            self.plugin_required(conf, args, non_parsed)
+
+        for path in consumers:
+            print("Processing: ", path)
+            f = open(path)
+            conf = yaml.safe_load(f.read())
+            self.consumer_required(conf, args, non_parsed)
 
     def build_parser(self, ensure):
         ensure.set_defaults(func=self.get_yaml_file)
