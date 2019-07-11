@@ -3,6 +3,7 @@ import sys
 import collections
 import os
 import yaml
+import re
 from .yaml_formatter import YamlOutputFormatter
 from operator import itemgetter
 from urllib.parse import urlparse
@@ -484,6 +485,12 @@ class YamlConfigResource(BaseResource):
 
         return "{}-{}".format(plugin['name'], route_name)
 
+    @staticmethod
+    def isguid(route):
+        guuid = "^(\{{0,1}([0-9a-fA-F]){8}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}\}{0,1})$"
+        return re.match(guuid, route)
+
+
     def get_config(self, data, args, non_parsed):
         route_res = RouteResource(self.http_client, self.formatter)
 
@@ -503,6 +510,8 @@ class YamlConfigResource(BaseResource):
             route = self.del_config_attr('route', route)
             if not route['name']:
                 route['name'] = n['id']
+            # if self.isguid(route['name']):
+            #     route['name'] += '_route'
             service['routes'].append(route)
 
         service['routes'] = sorted(service['routes'], key=itemgetter('name'))
@@ -519,6 +528,8 @@ class YamlConfigResource(BaseResource):
                 route = route_res._get(args, non_parsed)
 
                 plugin['route']['name'] = route['name'] if route['name'] else route['id']
+                # if self.isguid(plugin['route']['name']):
+                #     plugin['route']['name'] += '_route'
 
             plugin['protocols'] = n['protocols']
             plugin['run_on'] = n['run_on']
@@ -831,6 +842,8 @@ class EnsureResource(BaseResource):
 
     def consumer_required(self, conf, args, non_parsed):
         consumer_res = ConsumerResource(self.http_client, self.formatter)
+        key_auth_res = KeyAuthResource(self.http_client, self.formatter)
+
         consumers = conf['consumers']
 
         url = consumer_res.build_resource_url('create', args, non_parsed) + '/'
@@ -840,19 +853,34 @@ class EnsureResource(BaseResource):
 
             user['username'] = consumer['username']
             self.http_client.put(url + consumer['username'], json=user)
-            if consumer['keyauth_credentials']:
-                key['key'] = consumer['keyauth_credentials'][0]['key']
-                self.http_client.put(url + consumer['username'] + '/key-auth/' + key['key'], json=key)
+
+            args.consumer = user['username']
+            old_key = key_auth_res._list(args, non_parsed)
+
+            ident_list = list()
+            for k in old_key:
+                for key in consumer['keyauth_credentials']:
+                    if k['key'] == key['key']:
+                        ident_list.append(k['key'])
+                        break
+                if k['key'] not in ident_list:
+                    args.keyauth = k['id']
+                    key_auth_res.delete(args, non_parsed)
+
+            for key in consumer['keyauth_credentials']:
+                if key['key'] not in ident_list:
+                    self.http_client.post(url + consumer['username'] + '/key-auth/', json=key)
 
     def get_yaml_file(self, args, non_parsed):
         services = []
         plugins = []
         consumers = []
 
-        folder = list()
         if os.path.isdir(args.path):
             folder = os.listdir(args.path)
             for dr in folder:
+                if not os.path.isdir(dr):
+                    continue
                 sub_dr = os.listdir(dr)
                 for file in sub_dr:
                     print("DR", dr)
@@ -866,7 +894,14 @@ class EnsureResource(BaseResource):
 
         else:
             # @TODO: analyze magically what is it: service/plugin/consumer
-            services.append(args.path)
+            file_path = args.path[args.path.rfind("/"):]
+
+            if "consumers" in file_path:
+                consumers.append(args.path)
+            elif "plugins" in file_path:
+                plugins.append(args.path)
+            else:
+                services.append(args.path)
 
         for path in services:
             print("Processing: ", path)
@@ -885,6 +920,7 @@ class EnsureResource(BaseResource):
             f = open(path)
             conf = yaml.safe_load(f.read())
             self.consumer_required(conf, args, non_parsed)
+
 
     def build_parser(self, ensure):
         ensure.set_defaults(func=self.get_yaml_file)
