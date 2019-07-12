@@ -510,8 +510,8 @@ class YamlConfigResource(BaseResource):
             route = self.del_config_attr('route', route)
             if not route['name']:
                 route['name'] = n['id']
-            # if self.isguid(route['name']):
-            #     route['name'] += '_route'
+            if self.isguid(route['name']):
+                route['name'] += '_route'
             service['routes'].append(route)
 
         service['routes'] = sorted(service['routes'], key=itemgetter('name'))
@@ -528,8 +528,8 @@ class YamlConfigResource(BaseResource):
                 route = route_res._get(args, non_parsed)
 
                 plugin['route']['name'] = route['name'] if route['name'] else route['id']
-                # if self.isguid(plugin['route']['name']):
-                #     plugin['route']['name'] += '_route'
+                if self.isguid(plugin['route']['name']):
+                    plugin['route']['name'] += '_route'
 
             plugin['protocols'] = n['protocols']
             plugin['run_on'] = n['run_on']
@@ -741,39 +741,27 @@ class EnsureResource(BaseResource):
                 return '/routes/' + old['id']
         return None
 
-    def route_update(self, routes, url, args, non_parsed):
+    def route_update(self, routes, args, non_parsed):
         route_res = RouteResource(self.http_client, self.formatter)
-        yaml_res = YamlConfigResource(self.http_client, self.formatter)
+        service_res = ServiceResource(self.http_client, self.formatter)
 
         current_routes = list(route_res._list(args, non_parsed))
-        ident_list = list()
         old_list = list()
         for new in routes:
             for old in current_routes:
                 if new['name'] == old['name'] not in old_list:
                     old_list.append(old['name'])
-                cmp = yaml_res.del_config_attr('route', old)
-                if json.dumps(new, sort_keys=True) == json.dumps(cmp, sort_keys=True):
-                    ident_list.append(old['name'])
 
         for old in current_routes:
             if old['name'] not in old_list:
                 args.route = old['id']
                 route_res.delete(args, non_parsed)
 
+        service_id = service_res.id_getter(args.service)
         for new in routes:
-            if new['name'] in ident_list:
-                continue
+            new['service'] = {"id": service_id}
+            self.http_client.put('/routes/' + new['name'], json=new)
 
-            if new['name'] in old_list:
-                route_id = self.find_route_url(current_routes, new['name'])
-
-                if route_id is None:
-                    raise RuntimeError("Can't find old route: {}".format(new['name']))
-
-                self.http_client.patch(route_id, json=new)
-            else:
-                self.http_client.post(url, json=new)
 
     @staticmethod
     def find_plugin_url(current_plugins, plugin_name):
@@ -830,7 +818,7 @@ class EnsureResource(BaseResource):
         data['url'] = service['url']
 
         url = self.service_update(data, args, non_parsed)
-        self.route_update(routes, url + '/routes', args, non_parsed)
+        self.route_update(routes, args, non_parsed)
         self.plugin_update(plugins, url + '/plugins', args, non_parsed)
 
     def plugin_required(self, conf, args, non_parsed):
@@ -878,12 +866,18 @@ class EnsureResource(BaseResource):
 
         if os.path.isdir(args.path):
             folder = os.listdir(args.path)
+
+            if os.path.isabs(args.path):
+                config_path = args.path + '/'
+            else:
+                config_path = os.getcwd() + '/' + args.path + '/'
+
             for dr in folder:
-                if not os.path.isdir(dr):
+                sub_dr_path = config_path + dr
+                if not os.path.isdir(sub_dr_path):
                     continue
-                sub_dr = os.listdir(dr)
+                sub_dr = os.listdir(sub_dr_path)
                 for file in sub_dr:
-                    print("DR", dr)
                     full_path = os.path.join(args.path, dr, file)
                     if dr in '{services}':
                         services.append(full_path)
@@ -920,7 +914,6 @@ class EnsureResource(BaseResource):
             f = open(path)
             conf = yaml.safe_load(f.read())
             self.consumer_required(conf, args, non_parsed)
-
 
     def build_parser(self, ensure):
         ensure.set_defaults(func=self.get_yaml_file)
