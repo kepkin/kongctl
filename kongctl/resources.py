@@ -22,6 +22,21 @@ def get_version(http_client):
     return _get_verison
 
 
+def chain_key_get(d, *keys):
+    for key in keys:
+        v = d
+        for key_part in key.split('.'):
+            if not isinstance(v, dict):
+                break
+
+            v = v.get(key_part)
+
+        if v:
+            return v
+
+    return None
+
+
 class BaseResource(object):
     def __init__(self, http_client, formatter, resource_name):
         self.resource_name = resource_name
@@ -220,18 +235,7 @@ class PluginResource(BaseResource):
 
     @staticmethod
     def _chain_key_get(d, *keys):
-        for key in keys:
-            v = d
-            for key_part in key.split('.'):
-                if not isinstance(v, dict):
-                    break
-
-                v = v.get(key_part)
-
-            if v:
-                return v
-
-        return None
+        return chain_key_get(d, *keys)
 
     def short_formatter(self, resource):
         service_name = '*all*'
@@ -472,7 +476,7 @@ class YamlConfigResource(BaseResource):
             data.pop('preserve_host', None)
             data.pop('updated_at', None)
         elif resource_type in '{plugin}':
-            if not data['tags']:
+            if not data.get('tags'):
                 data.pop('tags', None)
         return data
 
@@ -501,14 +505,14 @@ class YamlConfigResource(BaseResource):
         service['name'] = data['service']['name']
         service['url'] = "{protocol}://{host}:{port}".format(**data['service'])
 
-        service['url'] += str(data['service']['path']) if data['service']['path'] is not None else ''
+        service['url'] += str(data['service'].get('path')) if data['service'].get('path') is not None else ''
 
         service['routes'] = list()
         for n in data['routes']:
             route = collections.OrderedDict()
             route.update(n)
             route = self.del_config_attr('route', route)
-            if not route['name']:
+            if not route.get('name'):
                 route['name'] = n['id']
             if self.isguid(route['name']):
                 route['name'] += '_route'
@@ -521,18 +525,22 @@ class YamlConfigResource(BaseResource):
         for n in data['plugins']:
             plugin = collections.OrderedDict()
             plugin['name'] = n['name']
-            plugin['route'] = n['route']
+            route_id = chain_key_get(n, 'route.id', 'route_id')
+            if route_id is not None:
+                plugin['route'] = {'id': route_id}
+            else:
+                plugin['route'] = None
 
             if plugin['route']:
                 args.route = plugin['route'].pop('id')
                 route = route_res._get(args, non_parsed)
 
-                plugin['route']['name'] = route['name'] if route['name'] else route['id']
+                plugin['route']['name'] = route.get('name', route['id'])
                 if self.isguid(plugin['route']['name']):
                     plugin['route']['name'] += '_route'
 
-            plugin['protocols'] = n['protocols']
-            plugin['run_on'] = n['run_on']
+            plugin['protocols'] = n.get('protocols')
+            plugin['run_on'] = n.get('run_on', 'first')
             if not n['config']:
                 plugin['config'] = dict()
             plugin.update(n)
@@ -583,7 +591,9 @@ class YamlConfigResource(BaseResource):
         data = list()
 
         for plug in plugins:
-            if not plug['service'] and not plug['route']:
+            service_id = chain_key_get(plug, 'service.id', 'service_id')
+            route_id = chain_key_get(plug, 'route.id', 'route_id')
+            if not service_id and not route_id:
                 data.append(plug)
 
         return data

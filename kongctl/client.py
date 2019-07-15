@@ -52,6 +52,9 @@ class HttpClient(object):
     def request(self, method, url, *args, **kwargs):
         if self.verbose:
             print("Making {} call: {}".format(method, self.endpoint + url, args, kwargs))
+            payload = kwargs.get('json')
+            if payload:
+                print("Payload: ", payload)
 
         kwargs['timeout'] = self.timeout
         res = self.session.request(method, self.endpoint + url, *args, **kwargs)
