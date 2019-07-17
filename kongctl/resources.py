@@ -483,8 +483,8 @@ class YamlConfigResource(BaseResource):
     @staticmethod
     def plugin_sort(plugin):
         route_name = ""
-        if plugin['route']:
-            if plugin['route']['name']:
+        if plugin.get('route'):
+            if plugin['route'].get('name'):
                 route_name = plugin['route']['name']
 
         return "{}-{}".format(plugin['name'], route_name)
@@ -530,7 +530,7 @@ class YamlConfigResource(BaseResource):
             else:
                 plugin['route'] = None
 
-            if plugin['route']:
+            if plugin.get('route'):
                 args.route = plugin['route'].pop('id')
                 route = route_res._get(args, non_parsed)
 
