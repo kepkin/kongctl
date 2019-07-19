@@ -483,8 +483,8 @@ class YamlConfigResource(BaseResource):
     @staticmethod
     def plugin_sort(plugin):
         route_name = ""
-        if plugin.get('route'):
-            if plugin['route'].get('name'):
+        if 'route' in plugin:
+            if 'name' in plugin['route']:
                 route_name = plugin['route']['name']
 
         return "{}-{}".format(plugin['name'], route_name)
@@ -512,7 +512,7 @@ class YamlConfigResource(BaseResource):
             route = collections.OrderedDict()
             route.update(n)
             route = self.del_config_attr('route', route)
-            if not route.get('name'):
+            if not 'name' not in route:
                 route['name'] = n['id']
             if self.isguid(route['name']):
                 route['name'] += '_route'
@@ -530,7 +530,7 @@ class YamlConfigResource(BaseResource):
             else:
                 plugin['route'] = None
 
-            if plugin.get('route'):
+            if 'route' in plugin:
                 args.route = plugin['route'].pop('id')
                 route = route_res._get(args, non_parsed)
 
@@ -540,7 +540,7 @@ class YamlConfigResource(BaseResource):
 
             plugin['protocols'] = n.get('protocols')
             plugin['run_on'] = n.get('run_on', 'first')
-            if not n['config']:
+            if 'config' not in n:
                 plugin['config'] = dict()
             plugin.update(n)
 
@@ -703,7 +703,7 @@ class EnsureResource(BaseResource):
         super().__init__(http_client, formatter, 'services')
 
     def id_plugin_route(self, plugin, args, non_parsed):
-        if plugin['route']:
+        if 'route' in plugin:
             current_routes = RouteResource(self.http_client, self.formatter)._list(args, non_parsed)
             for route in current_routes:
                 if route['name'] == plugin['route']['name']:
@@ -790,7 +790,7 @@ class EnsureResource(BaseResource):
         ident_list = list()
         old_list = list()
         for new in plugins:
-            if new.get('route'):
+            if 'route' in new:
                 new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
                 new['route'].pop('name', None)
             for old in current_plugins:
