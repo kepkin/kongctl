@@ -483,17 +483,17 @@ class YamlConfigResource(BaseResource):
     @staticmethod
     def plugin_sort(plugin):
         route_name = ""
-        if plugin['route']:
-            if plugin['route']['name']:
+        if 'route' in plugin:
+            if 'name' in plugin['route']:
                 route_name = plugin['route']['name']
 
         return "{}-{}".format(plugin['name'], route_name)
 
     @staticmethod
     def isguid(route):
-        guuid = "^(\{{0,1}([0-9a-fA-F]){8}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}\}{0,1})$"
+        guuid = "^(\{{0,1}([0-9a-fA-F]){8}-([0-9a-fA-F])" \
+                "{4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}\}{0,1})$"
         return re.match(guuid, route)
-
 
     def get_config(self, data, args, non_parsed):
         route_res = RouteResource(self.http_client, self.formatter)
@@ -512,16 +512,15 @@ class YamlConfigResource(BaseResource):
             route = collections.OrderedDict()
             route.update(n)
             route = self.del_config_attr('route', route)
-            if not route.get('name'):
+            if not 'name' not in route:
                 route['name'] = n['id']
             if self.isguid(route['name']):
                 route['name'] += '_route'
             service['routes'].append(route)
 
         service['routes'] = sorted(service['routes'], key=itemgetter('name'))
-        config_obj['services'].append(service)
 
-        config_obj['plugins'] = list()
+        service['plugins'] = list()
         for n in data['plugins']:
             plugin = collections.OrderedDict()
             plugin['name'] = n['name']
@@ -531,7 +530,7 @@ class YamlConfigResource(BaseResource):
             else:
                 plugin['route'] = None
 
-            if plugin['route']:
+            if 'route' in plugin:
                 args.route = plugin['route'].pop('id')
                 route = route_res._get(args, non_parsed)
 
@@ -541,14 +540,16 @@ class YamlConfigResource(BaseResource):
 
             plugin['protocols'] = n.get('protocols')
             plugin['run_on'] = n.get('run_on', 'first')
-            if not n['config']:
+            if 'config' not in n:
                 plugin['config'] = dict()
             plugin.update(n)
 
             plugin = self.del_config_attr('plugin', plugin)
-            config_obj['plugins'].append(plugin)
+            service['plugins'].append(plugin)
 
-        config_obj['plugins'] = sorted(config_obj['plugins'], key=self.plugin_sort)
+        service['plugins'] = sorted(service['plugins'], key=self.plugin_sort)
+        config_obj['services'].append(service)
+
         return config_obj
 
     def get_service(self, args, non_parsed):
@@ -625,6 +626,7 @@ class YamlConfigResource(BaseResource):
 
         for service in service_list:
             args.service = service['name']
+            print("Processing:", service['name'])
             file_path = path + args.service + '.yml'
             file = open(file_path, 'w')
             conf_service = self.get_service(args, non_parsed)
@@ -701,7 +703,7 @@ class EnsureResource(BaseResource):
         super().__init__(http_client, formatter, 'services')
 
     def id_plugin_route(self, plugin, args, non_parsed):
-        if plugin['route']:
+        if 'route' in plugin:
             current_routes = RouteResource(self.http_client, self.formatter)._list(args, non_parsed)
             for route in current_routes:
                 if route['name'] == plugin['route']['name']:
@@ -772,7 +774,6 @@ class EnsureResource(BaseResource):
             new['service'] = {"id": service_id}
             self.http_client.put('/routes/' + new['name'], json=new)
 
-
     @staticmethod
     def find_plugin_url(current_plugins, plugin_name):
         for old in current_plugins:
@@ -789,7 +790,7 @@ class EnsureResource(BaseResource):
         ident_list = list()
         old_list = list()
         for new in plugins:
-            if new.get('route'):
+            if 'route' in new:
                 new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
                 new['route'].pop('name', None)
             for old in current_plugins:
@@ -819,17 +820,17 @@ class EnsureResource(BaseResource):
                 self.http_client.post(url, json=new)
 
     def service_required(self, conf, args, non_parsed):
-        service = conf['services'][0]
-        routes = service['routes']
-        plugins = conf['plugins']
+        for service in conf['services']:
+            routes = service['routes']
+            plugins = service['plugins']
 
-        data = dict()
-        data['name'] = service['name']
-        data['url'] = service['url']
+            data = dict()
+            data['name'] = service['name']
+            data['url'] = service['url']
 
-        url = self.service_update(data, args, non_parsed)
-        self.route_update(routes, args, non_parsed)
-        self.plugin_update(plugins, url + '/plugins', args, non_parsed)
+            url = self.service_update(data, args, non_parsed)
+            self.route_update(routes, args, non_parsed)
+            self.plugin_update(plugins, url + '/plugins', args, non_parsed)
 
     def plugin_required(self, conf, args, non_parsed):
         plugin_res = PluginResource(self.http_client, self.formatter)
