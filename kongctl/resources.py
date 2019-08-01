@@ -126,9 +126,33 @@ class BaseResource(object):
         r = self.http_client.patch(url, json=data)
         self.formatter.print_obj(r.json())
 
-    def delete(self, args, non_parsed):
-        url = self.build_resource_url('delete', args, non_parsed)
+    def recursive_delete(self, args, non_parsed):
+        url = '/services/' + args.service
+        plugin_res = PluginResource(self.http_client, self.formatter)
+        route_res = RouteResource(self.http_client, self.formatter)
+
+        plugins = list(plugin_res._list(args, non_parsed))
+        routes = list(route_res._list(args, non_parsed))
+
+        plugin_url = url + '/plugins/'
+        for plugin in plugins:
+            self.http_client.delete(plugin_url + plugin['id'])
+            self.formatter.println("Delete plugin: name - {}, id - {} ".format(plugin['name'], plugin['id']))
+
+        route_url = '/routes/'
+        for route in routes:
+            self.http_client.delete(route_url + route['id'])
+            self.formatter.println("Delete route: name - {}, id - {} ".format(route['name'], route['id']))
+
         self.http_client.delete(url)
+        self.formatter.println("Delete service: {}".format(args.service))
+
+    def delete(self, args, non_parsed):
+        if self.resource_name in '{services}' and args.recursive:
+            self.recursive_delete(args, non_parsed)
+        else:
+            url = self.build_resource_url('delete', args, non_parsed)
+            self.http_client.delete(url)
 
 
 class ServiceResource(BaseResource):
@@ -163,6 +187,7 @@ class ServiceResource(BaseResource):
 
         delete = sb_delete.add_parser(self.resource_name[:-1])
         delete.set_defaults(func=self.delete)
+        delete.add_argument("-r", "--recursive", default=False, action='store_true', help="Recursive delete")
         delete.add_argument("service", help='service id')
 
 
@@ -483,7 +508,7 @@ class YamlConfigResource(BaseResource):
     @staticmethod
     def plugin_sort(plugin):
         route_name = ""
-        if 'route' in plugin:
+        if plugin['route']:
             if 'name' in plugin['route']:
                 route_name = plugin['route']['name']
 
@@ -512,7 +537,7 @@ class YamlConfigResource(BaseResource):
             route = collections.OrderedDict()
             route.update(n)
             route = self.del_config_attr('route', route)
-            if not 'name' not in route:
+            if 'name' not in route:
                 route['name'] = n['id']
             if self.isguid(route['name']):
                 route['name'] += '_route'
@@ -530,7 +555,7 @@ class YamlConfigResource(BaseResource):
             else:
                 plugin['route'] = None
 
-            if 'route' in plugin:
+            if plugin['route']:
                 args.route = plugin['route'].pop('id')
                 route = route_res._get(args, non_parsed)
 
@@ -542,7 +567,8 @@ class YamlConfigResource(BaseResource):
             plugin['run_on'] = n.get('run_on', 'first')
             if 'config' not in n:
                 plugin['config'] = dict()
-            plugin.update(n)
+            else:
+                plugin['config'] = n['config']
 
             plugin = self.del_config_attr('plugin', plugin)
             service['plugins'].append(plugin)
@@ -703,7 +729,7 @@ class EnsureResource(BaseResource):
         super().__init__(http_client, formatter, 'services')
 
     def id_plugin_route(self, plugin, args, non_parsed):
-        if 'route' in plugin:
+        if plugin['route']:
             current_routes = RouteResource(self.http_client, self.formatter)._list(args, non_parsed)
             for route in current_routes:
                 if route['name'] == plugin['route']['name']:
@@ -790,7 +816,7 @@ class EnsureResource(BaseResource):
         ident_list = list()
         old_list = list()
         for new in plugins:
-            if 'route' in new:
+            if new['route']:
                 new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
                 new['route'].pop('name', None)
             for old in current_plugins:
