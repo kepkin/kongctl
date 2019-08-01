@@ -137,15 +137,15 @@ class BaseResource(object):
         plugin_url = url + '/plugins/'
         for plugin in plugins:
             self.http_client.delete(plugin_url + plugin['id'])
-            self.formatter.println("Delete plugin: name - {}, id - {} ".format(plugin['name'], plugin['id']))
+            self.formatter.println("Deleted plugin: name - {}, id - {} ".format(plugin['name'], plugin['id']))
 
         route_url = '/routes/'
         for route in routes:
             self.http_client.delete(route_url + route['id'])
-            self.formatter.println("Delete route: name - {}, id - {} ".format(route['name'], route['id']))
+            self.formatter.println("Deleted route: name - {}, id - {} ".format(route['name'], route['id']))
 
         self.http_client.delete(url)
-        self.formatter.println("Delete service: {}".format(args.service))
+        self.formatter.println("Deleted service: {}".format(args.service))
 
     def delete(self, args, non_parsed):
         if self.resource_name in '{services}' and args.recursive:
