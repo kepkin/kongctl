@@ -816,7 +816,7 @@ class EnsureResource(BaseResource):
         ident_list = list()
         old_list = list()
         for new in plugins:
-            if new['route']:
+            if new.get('route'):
                 new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
                 new['route'].pop('name', None)
             for old in current_plugins:
