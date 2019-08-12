@@ -1,10 +1,10 @@
-
 from .json_formatter import JsonOutputFormatter
 from .yaml_formatter import YamlOutputFormatter
 from .client import HttpClient
 from .resources import *
 from . import __version__
 
+import logging
 import argparse
 import sys
 
@@ -29,8 +29,8 @@ def main():
     create = sb.add_parser('create', help='Create resource')
     update = sb.add_parser('update', help='Update resource')
     delete = sb.add_parser('delete', help='Delete resource')
-    config = sb.add_parser('config', help='Config yaml resource')
-    ensure = sb.add_parser('ensure', help='Create config yaml')
+    config = sb.add_parser('config', help='Forms a configuration file from the service of its routes and plugins')
+    ensure = sb.add_parser('ensure', help='Create: service, plugins and routes from config file')
 
     base_args, _ = parser.parse_known_args()
     http_client = HttpClient.build_from_args(base_args)
@@ -69,4 +69,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        logging.getLogger('__name__').fatal(e)

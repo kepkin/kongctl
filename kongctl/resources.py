@@ -7,6 +7,8 @@ import re
 from .yaml_formatter import YamlOutputFormatter
 from operator import itemgetter
 from urllib.parse import urlparse
+from .resource_error import *
+import logging
 
 _get_verison = None
 
@@ -44,6 +46,7 @@ class BaseResource(object):
         self.http_client = http_client
         self.formatter = formatter
         self.version = get_version(http_client)
+        self.logger = logging.getLogger(name='__name__')
 
     def short_formatter(self, resource):
         return "{}".format(resource['id'])
@@ -106,9 +109,12 @@ class BaseResource(object):
         return resource
 
     def _get(self, args, non_parsed):
-        url = self.build_resource_url('get', args, non_parsed)
-        r = self.http_client.get(url)
-        return r.json()
+        try:
+            url = self.build_resource_url('get', args, non_parsed)
+            r = self.http_client.get(url)
+            return r.json()
+        except RuntimeError as e:
+            raise GetError(args, self.resource_name[:-1], e)
 
     def get(self, args, non_parsed):
         r = self._get(args, non_parsed)
@@ -137,22 +143,25 @@ class BaseResource(object):
         plugin_url = url + '/plugins/'
         for plugin in plugins:
             self.http_client.delete(plugin_url + plugin['id'])
-            self.formatter.println("Deleted plugin: name - {}, id - {} ".format(plugin['name'], plugin['id']))
+            self.logger.info("Deleted plugin: name - {}, id - {} ".format(plugin['name'], plugin['id']))
 
         route_url = '/routes/'
         for route in routes:
             self.http_client.delete(route_url + route['id'])
-            self.formatter.println("Deleted route: name - {}, id - {} ".format(route['name'], route['id']))
+            self.logger.info("Deleted route: name - {}, id - {} ".format(route['name'], route['id']))
 
         self.http_client.delete(url)
-        self.formatter.println("Deleted service: {}".format(args.service))
+        self.logger.info("Deleted service: {}".format(args.service))
 
     def delete(self, args, non_parsed):
-        if self.resource_name in '{services}' and args.recursive:
-            self.recursive_delete(args, non_parsed)
-        else:
-            url = self.build_resource_url('delete', args, non_parsed)
-            self.http_client.delete(url)
+        try:
+            if self.resource_name in '{services}' and args.recursive:
+                self.recursive_delete(args, non_parsed)
+            else:
+                url = self.build_resource_url('delete', args, non_parsed)
+                self.http_client.delete(url)
+        except RuntimeError as e:
+            raise DeleteError(args, self.resource_name[:-1], e)
 
 
 class ServiceResource(BaseResource):
@@ -532,6 +541,8 @@ class YamlConfigResource(BaseResource):
 
         service['url'] += str(data['service'].get('path')) if data['service'].get('path') is not None else ''
 
+        self.logger.info('Config service: {}'.format(service['name']))
+
         service['routes'] = list()
         for n in data['routes']:
             route = collections.OrderedDict()
@@ -541,6 +552,7 @@ class YamlConfigResource(BaseResource):
                 route['name'] = n['id']
             if self.isguid(route['name']):
                 route['name'] += '_route'
+            self.logger.info('Route: {}'.format(route['name']))
             service['routes'].append(route)
 
         service['routes'] = sorted(service['routes'], key=itemgetter('name'))
@@ -549,6 +561,7 @@ class YamlConfigResource(BaseResource):
         for n in data['plugins']:
             plugin = collections.OrderedDict()
             plugin['name'] = n['name']
+            plugin.update(n)
             route_id = chain_key_get(n, 'route.id', 'route_id')
             if route_id is not None:
                 plugin['route'] = {'id': route_id}
@@ -571,6 +584,7 @@ class YamlConfigResource(BaseResource):
                 plugin['config'] = n['config']
 
             plugin = self.del_config_attr('plugin', plugin)
+            self.logger.info('Plugin: {}'.format(plugin['name']))
             service['plugins'].append(plugin)
 
         service['plugins'] = sorted(service['plugins'], key=self.plugin_sort)
@@ -580,13 +594,19 @@ class YamlConfigResource(BaseResource):
 
     def get_service(self, args, non_parsed):
         data = collections.OrderedDict()
-        data['service'] = self._get(args, non_parsed)
+
+        try:
+            data['service'] = self._get(args, non_parsed)
+        except GetError as e:
+            raise ConfigGetError(e)
+
         data['routes'] = self.get_list(args, non_parsed, 'routes')
         data['plugins'] = self.get_list(args, non_parsed, 'plugins')
 
         return self.get_config(data, args, non_parsed)
 
     def get_consumer(self, args, non_parsed):
+        self.logger.info('Processing consumers')
         consumer_conf = dict()
         consumer_conf['consumers'] = list()
 
@@ -603,9 +623,11 @@ class YamlConfigResource(BaseResource):
 
             data['username'] = consumer['username']
 
+            self.logger.info('Consumer: {}'.format(data['username']))
             data['keyauth_credentials'] = list()
             args.consumer = data['username']
             for key in KeyAuthResource(self.http_client, self.formatter)._list(args, non_parsed):
+                self.logger.info('Key: {}'.format(key['key']))
                 data['keyauth_credentials'].append({"key": key['key']})
 
             consumer_conf['consumers'].append(data)
@@ -613,6 +635,7 @@ class YamlConfigResource(BaseResource):
         return consumer_conf
 
     def get_plugin(self, args, non_parsed):
+        self.logger.info('Processing plugins')
         args.list_full = None
         plugins = PluginResource(self.http_client, self.formatter)._list(args, non_parsed)
         data = list()
@@ -621,18 +644,23 @@ class YamlConfigResource(BaseResource):
             service_id = chain_key_get(plug, 'service.id', 'service_id')
             route_id = chain_key_get(plug, 'route.id', 'route_id')
             if not service_id and not route_id:
+                self.logger.info('Plugin: {}'.format(plug['name']))
                 data.append(plug)
 
         return data
 
     def yaml_consumer(self, args, non_parsed):
+        self.logger.debug("Print output consumers.yaml file")
         self.formatter.print_obj(self.get_consumer(args, non_parsed))
 
     def yaml_service(self, args, non_parsed):
+        self.logger.debug("Print output config.yaml file")
+        conf_service = self.get_service(args, non_parsed)
         self._header()
-        self.formatter.print_obj(self.get_service(args, non_parsed))
+        self.formatter.print_obj(conf_service)
 
     def yaml_plugin(self, args, non_parsed):
+        self.logger.debug("Print output plugins.yaml file")
         self.formatter.print_obj(self.get_plugin(args, non_parsed))
 
     def dump_service(self, args, non_parsed):
@@ -644,6 +672,8 @@ class YamlConfigResource(BaseResource):
             for i in ServiceResource(self.http_client, self.formatter)._list(args, non_parsed):
                 if i['name'] == args.service or i['id'] == args.service:
                     service_list.append(i)
+            if not service_list:
+                raise DumpServiceError(args)
         else:
             service_list = ServiceResource(self.http_client, self.formatter)._list(args, non_parsed)
 
@@ -652,7 +682,7 @@ class YamlConfigResource(BaseResource):
 
         for service in service_list:
             args.service = service['name']
-            print("Processing:", service['name'])
+            self.logger.info("Processing: {}".format(service['name']))
             file_path = path + args.service + '.yml'
             file = open(file_path, 'w')
             conf_service = self.get_service(args, non_parsed)
@@ -718,9 +748,8 @@ class YamlConfigResource(BaseResource):
         dump_consumer.set_defaults(func=self.dump_consumer)
         dump_consumer.add_argument("consumer", default=None, nargs='?', help='consumer id or None {username or id}')
 
-    @staticmethod
-    def _header(file=sys.stdout):
-        file.write('_format_version: \"1.1\"')
+    def _header(self, file=sys.stdout):
+        file.write('_format_version: \"{}\"'.format(".".join(map(str, self.version))))
         file.write('\n\n')
 
 
@@ -738,6 +767,7 @@ class EnsureResource(BaseResource):
         raise RuntimeError("Can't find such route {}".format(plugin['route']['name']))
 
     def service_update(self, data, args, non_parsed):
+        self.logger.info("Create or patch service: {}".format(data['name']))
         service_res = ServiceResource(self.http_client, self.formatter)
 
         args.service = data['name']
@@ -745,7 +775,7 @@ class EnsureResource(BaseResource):
         url = service_res.build_resource_url('create')
         try:
             current_service = service_res._get(args, non_parsed)
-        except RuntimeError:
+        except GetError:
             current_service = None
 
         if current_service:
@@ -786,6 +816,11 @@ class EnsureResource(BaseResource):
         current_routes = list(route_res._list(args, non_parsed))
         old_list = list()
         for new in routes:
+            try:
+                self.logger.info("Route: {}".format(new['name']))
+            except KeyError:
+                raise KeyError("In route missing field \'name\'")
+
             for old in current_routes:
                 if new['name'] == old['name'] not in old_list:
                     old_list.append(old['name'])
@@ -816,9 +851,18 @@ class EnsureResource(BaseResource):
         ident_list = list()
         old_list = list()
         for new in plugins:
-            if new['route']:
-                new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
-                new['route'].pop('name', None)
+            try:
+                self.logger.info("Plugin: {}".format(new['name']))
+            except KeyError:
+                raise KeyError("In plugin missing field \'name\'")
+
+            try:
+                if new['route']:
+                    new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
+                    new['route'].pop('name', None)
+            except KeyError as e:
+                raise KeyError("In plugin {} no find in field route {}".format(new['name'], e))
+
             for old in current_plugins:
                 if old['name'] == new['name'] not in old_list:
                     old_list.append(old['name'])
@@ -851,8 +895,11 @@ class EnsureResource(BaseResource):
             plugins = service['plugins']
 
             data = dict()
-            data['name'] = service['name']
-            data['url'] = service['url']
+            try:
+                data['name'] = service['name']
+                data['url'] = service['url']
+            except Exception as e:
+                raise EnsureServiceError(e)
 
             url = self.service_update(data, args, non_parsed)
             self.route_update(routes, args, non_parsed)
@@ -863,6 +910,7 @@ class EnsureResource(BaseResource):
 
         url = plugin_res.build_resource_url('create', args, non_parsed) + '/'
         for plugin in conf:
+            self.logger.info('Plugin: {}'.format(plugin['name']))
             self.http_client.put(url + plugin['id'], json=plugin)
 
     def consumer_required(self, conf, args, non_parsed):
@@ -873,6 +921,7 @@ class EnsureResource(BaseResource):
 
         url = consumer_res.build_resource_url('create', args, non_parsed) + '/'
         for consumer in consumers:
+            self.logger.info('Consumer: {}'.format(consumer['username']))
             user = dict()
             key = dict()
 
@@ -885,6 +934,11 @@ class EnsureResource(BaseResource):
             ident_list = list()
             for k in old_key:
                 for key in consumer['keyauth_credentials']:
+                    try:
+                        key['key']
+                    except Exception:
+                        raise EnsureKeyAuthError(user['username'])
+
                     if k['key'] == key['key']:
                         ident_list.append(k['key'])
                         break
@@ -897,6 +951,7 @@ class EnsureResource(BaseResource):
                     self.http_client.post(url + consumer['username'] + '/key-auth/', json=key)
 
     def get_yaml_file(self, args, non_parsed):
+        self.logger.info("Process the file or directory")
         services = []
         plugins = []
         consumers = []
@@ -935,19 +990,19 @@ class EnsureResource(BaseResource):
                 services.append(args.path)
 
         for path in services:
-            print("Processing: ", path)
+            self.logger.info("Processing service: {}".format(path))
             f = open(path)
             conf = yaml.safe_load(f.read())
             self.service_required(conf, args, non_parsed)
 
         for path in plugins:
-            print("Processing: ", path)
+            self.logger.info("Processing plugins: {}".format(path))
             f = open(path)
             conf = yaml.safe_load(f.read())
             self.plugin_required(conf, args, non_parsed)
 
         for path in consumers:
-            print("Processing: ", path)
+            self.logger.info("Processing consumers: {}".format(path))
             f = open(path)
             conf = yaml.safe_load(f.read())
             self.consumer_required(conf, args, non_parsed)
