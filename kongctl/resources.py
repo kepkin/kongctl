@@ -8,7 +8,6 @@ from .yaml_formatter import YamlOutputFormatter
 from operator import itemgetter
 from urllib.parse import urlparse
 from .resource_error import *
-import logging
 
 _get_verison = None
 
@@ -43,10 +42,30 @@ class BaseResource(object):
     def __init__(self, http_client, formatter, resource_name):
         self.resource_name = resource_name
         self.cache = dict()
-        self.http_client = http_client
-        self.formatter = formatter
-        self.version = get_version(http_client)
-        self.logger = logging.getLogger(name='__name__')
+        self.get_http_client = http_client
+        self.get_formatter = formatter
+
+    @property
+    def formatter(self):
+        if callable(self.get_formatter):
+            return self.get_formatter()
+        return self.get_formatter
+
+    @property
+    def logger(self):
+        return self.http_client.get_logger()
+
+    @property
+    def http_client(self):
+        if callable(self.get_http_client):
+            return self.get_http_client()
+        return self.get_http_client
+
+
+
+    @property
+    def version(self):
+        return get_version(self.http_client)
 
     def short_formatter(self, resource):
         return "{}".format(resource['id'])
@@ -716,35 +735,42 @@ class YamlConfigResource(BaseResource):
             YamlOutputFormatter(file).print_obj(plugins)
 
     def build_parser(self, sb_config):
-        service_config = sb_config.add_parser('service')
+        service_config = sb_config.add_parser('service',
+                                              description='Service its routes and plugins print config file in stdout.')
         service_config.set_defaults(func=self.yaml_service)
         service_config.add_argument("service", help='service id {username or id}')
 
-        consumer_config = sb_config.add_parser('consumer')
+        consumer_config = sb_config.add_parser('consumer',
+                                               description='Consumers and their key-auth print config file in stdout')
         consumer_config.set_defaults(func=self.yaml_consumer)
         consumer_config.add_argument("consumer", default=None, nargs='?', help='consumer id {username or id}')
 
-        plugin_config = sb_config.add_parser('plugin')
+        plugin_config = sb_config.add_parser('plugin',
+                                             description='Plugins not connected to services and routes print config '
+                                                         'file in stdout.')
         plugin_config.set_defaults(func=self.yaml_plugin)
         # @TODO: ambigous arguments.. should be deleted
         plugin_config.add_argument("-s", "--service", default=None, nargs='?',
                                    help='service id or None {username or id}')
         plugin_config.add_argument("-r", "--route", default=None, nargs='?', help='route id or None {username or id}')
 
-        dump = sb_config.add_parser('dump')
+        dump = sb_config.add_parser('dump', description='Dump config file')
         sb_dump = dump.add_subparsers()
 
-        dump_plugins = sb_dump.add_parser('plugin')
+        dump_plugins = sb_dump.add_parser('plugin', description='Plugins not connected to services and routes dump in '
+                                                                'config file.')
         dump_plugins.set_defaults(func=self.dump_plugin)
         dump_plugins.add_argument("-s", "--service", default=None, nargs='?',
                                   help='service id or None {username or id}')
         dump_plugins.add_argument("-r", "--route", default=None, nargs='?', help='route id or None {username or id}')
 
-        dump_service = sb_dump.add_parser('service')
+        dump_service = sb_dump.add_parser('service', description='Service its routes and plugins dump in config file. '
+                                                                 'If id not received will be dump all services with '
+                                                                 'server.')
         dump_service.set_defaults(func=self.dump_service)
         dump_service.add_argument("service", default=None, nargs='?', help='service id or None {username or id}')
 
-        dump_consumer = sb_dump.add_parser('consumer')
+        dump_consumer = sb_dump.add_parser('consumer', description='Consumers and their key-auth dump in config file')
         dump_consumer.set_defaults(func=self.dump_consumer)
         dump_consumer.add_argument("consumer", default=None, nargs='?', help='consumer id or None {username or id}')
 
@@ -1009,4 +1035,4 @@ class EnsureResource(BaseResource):
 
     def build_parser(self, ensure):
         ensure.set_defaults(func=self.get_yaml_file)
-        ensure.add_argument('path', help='directory yaml config')
+        ensure.add_argument('path', help='directory or yaml config file')

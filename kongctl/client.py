@@ -8,6 +8,8 @@ import yaml
 
 
 class HttpClient(object):
+    logger_init_flag = False
+
     _default_opts = {
         "timeout": 5,
         "additional_time": 5,
@@ -34,6 +36,9 @@ class HttpClient(object):
         self.logger.debug("Constructing HttpClient call: {}".format(self.endpoint))
 
     def get_logger(self, path='./kongctl/logging.yml', name='__name__'):
+        if HttpClient.logger_init_flag:
+            return logging.getLogger(name)
+
         with open(path) as stream:
             config_log = yaml.safe_load(stream)
 
@@ -45,6 +50,8 @@ class HttpClient(object):
             config_log['root']['handlers'].append('superVerbose')
 
         logging.config.dictConfig(config_log)
+
+        HttpClient.logger_init_flag = True
 
         return logging.getLogger(name)
 
