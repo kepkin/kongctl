@@ -1,10 +1,10 @@
-
 from .json_formatter import JsonOutputFormatter
 from .yaml_formatter import YamlOutputFormatter
 from .client import HttpClient
 from .resources import *
 from . import __version__
 
+import logging
 import argparse
 import sys
 
@@ -29,18 +29,25 @@ def main():
     create = sb.add_parser('create', help='Create resource')
     update = sb.add_parser('update', help='Update resource')
     delete = sb.add_parser('delete', help='Delete resource')
-    config = sb.add_parser('config', help='Config yaml resource')
-    ensure = sb.add_parser('ensure', help='Create config yaml')
+    config = sb.add_parser('config', help='Get yaml config file', description="Assembling yaml config file")
+    ensure = sb.add_parser('ensure', help='Create: service, plugins and routes from config file',
+                           description='Add the service of its paths and plugins or plugins not have services and '
+                                       'routes or consumers and their key-auth from the configuration file to the '
+                                       'Kong server.')
 
-    base_args, _ = parser.parse_known_args()
-    http_client = HttpClient.build_from_args(base_args)
+    def get_http_client():
+        base_args, _ = parser.parse_known_args()
+        http_client = HttpClient.build_from_args(base_args)
+        return http_client
+
+    def get_formatter():
+        args, _ = parser.parse_known_args()
+        if args.yml:
+            return YamlOutputFormatter()
+        else:
+            return JsonOutputFormatter()
+
     parser.add_argument('-y', '--yml', default=False, action='store_true', help='Yaml conversion')
-
-    args, _ = parser.parse_known_args()
-    if args.yml:
-        formatter = YamlOutputFormatter()
-    else:
-        formatter = JsonOutputFormatter()
     list_.add_argument('-f', dest="list_full", action='store_true', default=False,
                        help='Get full description of resource')
 
@@ -51,14 +58,14 @@ def main():
     sb_delete = delete.add_subparsers()
     sb_config = config.add_subparsers()
 
-    EnsureResource(http_client, formatter).build_parser(ensure)
-    YamlConfigResource(http_client, formatter).build_parser(sb_config)
-    ServiceResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    RouteResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    PluginResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    PluginSchemaResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    ConsumerResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-    KeyAuthResource(http_client, formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    EnsureResource(get_http_client, get_formatter).build_parser(ensure)
+    YamlConfigResource(get_http_client, get_formatter).build_parser(sb_config)
+    ServiceResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    RouteResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    PluginResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    PluginSchemaResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    ConsumerResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+    KeyAuthResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
 
     args, non_parsed = parser.parse_known_args()
     try:
@@ -69,4 +76,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        logging.getLogger('__name__').fatal(e)

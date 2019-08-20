@@ -1,0 +1,25 @@
+version: 1
+formatters:
+  simple:
+    format: '%(levelname)s, %(asctime)s, %(module)s - %(message)s'
+  superVerbose:
+    format: "%(levelname)s, %(asctime)s, %(module)s, func %(funcName)s, line %(lineno)d - %(message)s"
+handlers:
+  simple:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: simple
+    stream: ext://sys.stderr
+  verbose:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: simple
+    stream: ext://sys.stderr
+  superVerbose:
+    class: logging.StreamHandler
+    level: 0
+    formatter: superVerbose
+    stream: ext://sys.stderr
+root:
+  level: DEBUG
+  handlers: [simple]
