@@ -537,14 +537,14 @@ class YamlConfigResource(BaseResource):
         elif resource_type in '{plugin}':
             if not data.get('tags'):
                 data.pop('tags', None)
-            if data.get('route', False) is None:
-                data.pop('route', False)
+            if data.get('route') is None:
+                data.pop('route', None)
         return data
 
     @staticmethod
     def plugin_sort(plugin):
         route_name = ""
-        if plugin.get('route', False):
+        if plugin.get('route'):
             if 'name' in plugin['route']:
                 route_name = plugin['route']['name']
 
@@ -595,7 +595,7 @@ class YamlConfigResource(BaseResource):
             else:
                 plugin['route'] = None
 
-            if plugin.get('route', False) and plugin['route']:
+            if plugin.get('route'):
                 args.route = plugin['route'].pop('id')
                 route = route_res._get(args, non_parsed)
 
@@ -893,7 +893,7 @@ class EnsureResource(BaseResource):
             except KeyError:
                 raise KeyError("In plugin missing field \'name\'")
 
-            if new.get('route', False) and new['route']:
+            if new.get('route'):
                 new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
                 new['route'].pop('name', None)
 
