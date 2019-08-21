@@ -5,6 +5,7 @@ import requests
 import logging
 import logging.config
 import yaml
+from .logger import LoggerConfig
 
 
 class HttpClient(object):
@@ -35,25 +36,18 @@ class HttpClient(object):
 
         self.logger.debug("Constructing HttpClient call: {}".format(self.endpoint))
 
-    def get_logger(self, path='./kongctl/logging.yml', name='__name__'):
+    def get_logger(self, name='__name__'):
         if HttpClient.logger_init_flag:
             return logging.getLogger(name)
 
-        with open(path) as stream:
-            config_log = yaml.safe_load(stream)
-
-        if self.verbose:
-            config_log['root']['handlers'].clear()
-            config_log['root']['handlers'].append('verbose')
-        elif self.super_verbose:
-            config_log['root']['handlers'].clear()
-            config_log['root']['handlers'].append('superVerbose')
-
-        logging.config.dictConfig(config_log)
-
+        logger_config = LoggerConfig()
         HttpClient.logger_init_flag = True
 
-        return logging.getLogger(name)
+        if self.verbose:
+            return logger_config.get_verbose_logger()
+        elif self.super_verbose:
+            return logger_config.get_super_verbose_logger()
+        return logger_config.get_simple_logger()
 
     @classmethod
     def build_from_args(cls, args):
@@ -62,7 +56,7 @@ class HttpClient(object):
 
         if args.ctx:
             ctx_path = os.path.expanduser(args.ctx)
-            if not os.path.exists(ctx_path):
+            if not (os.path.isfile(ctx_path) and os.path.exists(ctx_path)):
                 ctx_path = os.path.expanduser(os.path.join("~", ".kongctl", ctx_path))
 
             opts.update(json.load(open(ctx_path)))
