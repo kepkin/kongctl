@@ -1007,7 +1007,6 @@ class EnsureResource(BaseResource):
 
     def jwt_consumer(self, url, consumer, args, non_parsed):
         jwt_res = JwtSecrets(self.http_client_factory, self.formatter_factory)
-        yaml_res = YamlConfigResource(self.http_client_factory, self.formatter_factory)
 
         url += consumer['username']
         args.jwt = consumer['username']
@@ -1023,7 +1022,7 @@ class EnsureResource(BaseResource):
                 raise KeyError("In jwt_secrets missing field \'key\'")
 
             for current_jwt in jwt_list:
-                cmp = yaml_res.del_config_attr('jwt', current_jwt)
+                cmp = YamlConfigResource.del_config_attr('jwt', current_jwt)
                 if json.dumps(new_jwt, sort_keys=True) == json.dumps(cmp, sort_keys=True):
                     ident_list.append(new_jwt['key'])
 
