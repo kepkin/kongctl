@@ -67,6 +67,7 @@ def main():
         PluginSchemaResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
         ConsumerResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
         KeyAuthResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+        JwtSecrets(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
 
         args, non_parsed = parser.parse_known_args()
         try:

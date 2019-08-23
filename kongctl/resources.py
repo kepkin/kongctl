@@ -502,6 +502,54 @@ class KeyAuthResource(BaseResource):
         delete.add_argument("keyauth", help='id of keyauth')
 
 
+class JwtSecrets(BaseResource):
+    def __init__(self, http_client, formatter):
+        super().__init__(http_client, formatter, 'jwt')
+
+    def build_resource_url(self, op, args=None, non_parsed=None, id_=None):
+        if op == 'get_by_id':
+            raise NotImplemented()
+        elif op == 'list':
+            return '/consumers/{}/{}/'.format(args.consumer, self.resource_name)
+        elif op in {'get', 'update', 'delete'}:
+            return '/consumers/{}/{}/{}'.format(args.consumer, self.resource_name, args.jwt)
+        elif op in {'create'}:
+            return '/consumers/{}/{}/'.format(args.consumer, self.resource_name)
+
+    def short_formatter(self, resource):
+        self.formatter.print_pair('id', resource['id'])
+        self.formatter.print_pair('key', resource['key'], indent=1)
+        self.formatter.print_pair('secret', resource['secret'], indent=1)
+        self.formatter.println()
+
+    def id_getter(self, resource_name):
+        raise NotImplemented()
+
+    def build_parser(self, sb_list, sb_get, sb_create, sb_update, sb_delete):
+        list_ = sb_list.add_parser(self.resource_name)
+        list_.set_defaults(func=self.list)
+        list_.add_argument("consumer", help='consumer id {username or id}')
+
+        get = sb_get.add_parser(self.resource_name)
+        get.set_defaults(func=self.get)
+        get.add_argument("consumer", help='consumer id {username or id}')
+        get.add_argument("jwt", help='id of jwt')
+
+        create = sb_create.add_parser(self.resource_name)
+        create.add_argument("consumer", help='Will apply plugin data to this consumer {username or id}')
+        create.set_defaults(func=self.create)
+
+        update = sb_update.add_parser(self.resource_name)
+        update.set_defaults(func=self.update)
+        update.add_argument("consumer", help='Will apply plugin data to this consumer {username or id}')
+        update.add_argument("jwt", help='id of jwt')
+
+        delete = sb_delete.add_parser(self.resource_name)
+        delete.set_defaults(func=self.delete)
+        delete.add_argument("consumer", help='consumer id {username or id}')
+        delete.add_argument("jwt", help='id of jwt')
+
+
 class YamlConfigResource(BaseResource):
     def __init__(self, http_client, formatter):
         super().__init__(http_client, formatter, 'services')
@@ -539,6 +587,8 @@ class YamlConfigResource(BaseResource):
                 data.pop('tags', None)
             if data.get('route') is None:
                 data.pop('route', None)
+        elif resource_type in '{jwt}':
+            data.pop('consumer', None)
         return data
 
     @staticmethod
@@ -636,6 +686,7 @@ class YamlConfigResource(BaseResource):
         self.logger.info('Processing consumers')
         consumer_res = ConsumerResource(self.http_client_factory, self.formatter_factory)
         key_auth_res = KeyAuthResource(self.http_client_factory, self.formatter_factory)
+        jwt_res = JwtSecrets(self.http_client_factory, self.formatter_factory)
         consumer_conf = dict()
         consumer_conf['consumers'] = list()
 
@@ -658,6 +709,13 @@ class YamlConfigResource(BaseResource):
             for key in key_auth_res._list(args, non_parsed):
                 self.logger.info('Key: {}'.format(key['key']))
                 data['keyauth_credentials'].append({"key": key['key']})
+
+            for jwt in jwt_res._list(args, non_parsed):
+                if not data.get('jwt_secrets'):
+                    data['jwt_secrets'] = list()
+                self.logger.info('jwt: key - {}'.format(jwt['key']))
+                val = self.del_config_attr('jwt', jwt)
+                data['jwt_secrets'].append(val)
 
             consumer_conf['consumers'].append(data)
 
@@ -947,6 +1005,37 @@ class EnsureResource(BaseResource):
             self.logger.info('Plugin: {}'.format(plugin['name']))
             self.http_client.put(url + plugin['id'], json=plugin)
 
+    def jwt_consumer(self, url, consumer, args, non_parsed):
+        jwt_res = JwtSecrets(self.http_client_factory, self.formatter_factory)
+
+        url += consumer['username']
+        args.jwt = consumer['username']
+        jwt_list = list(jwt_res._list(args, non_parsed))
+
+        ident_list = list()
+        if not consumer.get('jwt_secrets'):
+            consumer['jwt_secrets'] = list()
+        for new_jwt in consumer['jwt_secrets']:
+            try:
+                self.logger.info('jwt: key - {}'.format(new_jwt['key']))
+            except KeyError:
+                raise KeyError("In jwt_secrets missing field \'key\'")
+
+            for current_jwt in jwt_list:
+                cmp = YamlConfigResource.del_config_attr('jwt', current_jwt)
+                if json.dumps(new_jwt, sort_keys=True) == json.dumps(cmp, sort_keys=True):
+                    ident_list.append(new_jwt['key'])
+
+        for current_jwt in jwt_list:
+            if current_jwt['key'] in ident_list:
+                continue
+            self.http_client.delete(url + "/jwt/{}/".format(current_jwt['id']))
+
+        for jwt in consumer['jwt_secrets']:
+            if jwt['key'] in ident_list:
+                continue
+            self.http_client.post(url + '/jwt', json=jwt)
+
     def consumer_required(self, conf, args, non_parsed):
         consumer_res = ConsumerResource(self.http_client_factory, self.formatter_factory)
         key_auth_res = KeyAuthResource(self.http_client_factory, self.formatter_factory)
@@ -981,8 +1070,10 @@ class EnsureResource(BaseResource):
                     key_auth_res.delete(args, non_parsed)
 
             for key in consumer['keyauth_credentials']:
+                self.logger.info('key: {}'.format(key['key']))
                 if key['key'] not in ident_list:
                     self.http_client.post(url + consumer['username'] + '/key-auth/', json=key)
+            self.jwt_consumer(url, consumer, args, non_parsed)
 
     def get_yaml_file(self, args, non_parsed):
         self.logger.info("Process the file or directory")
