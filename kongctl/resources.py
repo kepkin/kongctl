@@ -1017,7 +1017,11 @@ class EnsureResource(BaseResource):
         if not consumer.get('jwt_secrets'):
             consumer['jwt_secrets'] = list()
         for new_jwt in consumer['jwt_secrets']:
-            self.logger.info('jwt: key - {}'.format(new_jwt['key']))
+            try:
+                self.logger.info('jwt: key - {}'.format(new_jwt['key']))
+            except KeyError:
+                raise KeyError("In jwt_secrets missing field \'key\'")
+
             for current_jwt in jwt_list:
                 cmp = yaml_res.del_config_attr('jwt', current_jwt)
                 if json.dumps(new_jwt, sort_keys=True) == json.dumps(cmp, sort_keys=True):
