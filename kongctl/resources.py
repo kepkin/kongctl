@@ -159,8 +159,8 @@ class BaseResource(object):
 
     def recursive_delete(self, args, non_parsed):
         url = '/services/' + args.service
-        plugin_res = PluginResource(self.http_client, self.formatter)
-        route_res = RouteResource(self.http_client, self.formatter)
+        plugin_res = PluginResource(self.http_client_factory, self.formatter_factory)
+        route_res = RouteResource(self.http_client_factory, self.formatter_factory)
 
         plugins = list(plugin_res._list(args, non_parsed))
         routes = list(route_res._list(args, non_parsed))
