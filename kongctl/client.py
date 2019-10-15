@@ -69,6 +69,7 @@ class HttpClient(object):
     def build_parser(parser):
         parser.add_argument("-c", "--ctx", metavar="PATH", help="context file")
         parser.add_argument("-s", "--server", metavar="url", default=argparse.SUPPRESS, help="Url to kong api")
+        parser.add_argument("--timeout", default=5, type=int, help="Timeout in seconds")
         parser.add_argument("-v", dest="verbose", action='store_true', default=False, help="verbose mode")
         parser.add_argument("-vv", dest="super_verbose", action='store_true', default=False, help="super verbose mode")
 
