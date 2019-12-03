@@ -606,7 +606,10 @@ class YamlConfigResource(BaseResource):
     def isguid(route):
         guuid = "^(\{{0,1}([0-9a-fA-F]){8}-([0-9a-fA-F])" \
                 "{4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}\}{0,1})$"
-        return re.match(guuid, route)
+        if route:
+            return re.match(guuid, route)
+        else:
+            return False
 
     def get_config(self, data, args, non_parsed):
         route_res = RouteResource(self.http_client_factory, self.formatter_factory)
