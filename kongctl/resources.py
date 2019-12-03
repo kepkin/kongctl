@@ -233,7 +233,7 @@ class RouteResource(BaseResource):
         hosts = resource.get('hosts', None) or ['*']
         paths = resource.get('paths', None) or ['/']
 
-        ref = ServiceResource(self.http_client, self.formatter)
+        ref = ServiceResource(self.http_client_factory, self.formatter_factory)
         self.formatter.print_pair(resource['id'], ref.get_by_id(resource['service']['id'])['name'], indent=indent)
 
         for h in hosts:
@@ -255,7 +255,7 @@ class RouteResource(BaseResource):
     def create(self, args, non_parsed):
         url = self.build_resource_url('create', args, non_parsed)
 
-        ref = ServiceResource(self.http_client, self.formatter)
+        ref = ServiceResource(self.http_client_factory, self.formatter_factory)
         service_id = ref.id_getter(args.service)
 
         data = self.load_data_from_stdin()
@@ -301,10 +301,10 @@ class PluginResource(BaseResource):
         route_res = None
         service_id = self._chain_key_get(resource, 'service.id', 'service_id')
         if service_id:
-            ref = ServiceResource(self.http_client, self.formatter)
+            ref = ServiceResource(self.http_client_factory, self.formatter_factory)
             service_name = ref.get_by_id(service_id)['name']
 
-        route_ref = RouteResource(self.http_client, self.formatter)
+        route_ref = RouteResource(self.http_client_factory, self.formatter_factory)
         route_id = self._chain_key_get(resource, 'route.id', 'route_id')
         if route_id:
             route_res = route_ref.get_by_id(route_id)
@@ -334,8 +334,8 @@ class PluginResource(BaseResource):
     def create(self, args, non_parsed):
         url = self.build_resource_url('create', args, non_parsed)
 
-        service_ref = ServiceResource(self.http_client, self.formatter)
-        route_ref = RouteResource(self.http_client, self.formatter)
+        service_ref = ServiceResource(self.http_client_factory, self.formatter_factory)
+        route_ref = RouteResource(self.http_client_factory, self.formatter_factory)
 
         data = self.load_data_from_stdin()
 
@@ -391,7 +391,9 @@ class PluginSchemaResource(BaseResource):
         raise NotImplemented()
 
     def _list(self, args, non_parsed):
+        print("qq"*20)
         r = self.http_client.get(self.build_resource_url('list', args, non_parsed))
+        print("qq"*20)
         data = r.json()
 
         for resource in data['enabled_plugins']:
