@@ -9,6 +9,34 @@ import argparse
 import sys
 
 
+def build_http_client_parser(parser):
+    parser.add_argument("-c", "--ctx", metavar="PATH", help="context file")
+    parser.add_argument("-s", "--server", metavar="url", default=argparse.SUPPRESS, help="Url to kong api")
+    parser.add_argument("--timeout", default=5, type=int, help="Timeout in seconds")
+    parser.add_argument("-v", dest="verbose", action='store_true', default=False, help="verbose mode")
+    parser.add_argument("-vv", dest="super_verbose", action='store_true', default=False, help="super verbose mode")
+
+
+def build_app_config(args):
+    config = {'client': {}, 'var_map': {}}
+    config['client'].update(HttpClient.default_opts)
+
+    if args.ctx:
+        ctx_path = os.path.expanduser(args.ctx)
+        if not (os.path.isfile(ctx_path) and os.path.exists(ctx_path)):
+            ctx_path = os.path.expanduser(os.path.join("~", ".kongctl", ctx_path))
+        data_conf = json.load(open(ctx_path))
+
+        config['client'].update(data_conf.get('client', {}))
+        config['var_map'].update(data_conf.get('var_map', {}))
+
+    return config
+
+
+def build_http_client(app_config):
+    return HttpClient(**app_config['client'])
+
+
 def main():
     try:
         parser = argparse.ArgumentParser(description='Kong command line client for admin api.')
@@ -22,7 +50,7 @@ def main():
             parser.print_help()
 
         parser.set_defaults(func=usage_func)
-        HttpClient.build_parser(parser)
+        build_http_client_parser(parser)
 
         sb = parser.add_subparsers(help='')
         list_ = sb.add_parser('list', help='Get all resources')
@@ -36,13 +64,14 @@ def main():
                                            'routes or consumers and their key-auth from the configuration file to the '
                                            'Kong server.')
 
+        args, _ = parser.parse_known_args()
+        app_config = build_app_config(args)
+
         def get_http_client():
-            base_args, _ = parser.parse_known_args()
-            http_client = HttpClient.build_from_args(base_args)
+            http_client = build_http_client(app_config)
             return http_client
 
         def get_formatter():
-            args, _ = parser.parse_known_args()
             if args.yml:
                 return YamlOutputFormatter()
             else:
@@ -59,7 +88,7 @@ def main():
         sb_delete = delete.add_subparsers()
         sb_config = config.add_subparsers()
 
-        EnsureResource(get_http_client, get_formatter).build_parser(ensure)
+        EnsureResource(get_http_client, get_formatter, app_config.get('var_map', {})).build_parser(ensure)
         YamlConfigResource(get_http_client, get_formatter).build_parser(sb_config)
         ServiceResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
         RouteResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)

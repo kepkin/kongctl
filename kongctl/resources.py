@@ -854,8 +854,9 @@ class YamlConfigResource(BaseResource):
 
 
 class EnsureResource(BaseResource):
-    def __init__(self, http_client, formatter):
+    def __init__(self, http_client, formatter, var_map):
         super().__init__(http_client, formatter, 'services')
+        self.var_map = var_map
 
     def id_plugin_route(self, plugin, args, non_parsed):
         if plugin['route']:
@@ -942,11 +943,9 @@ class EnsureResource(BaseResource):
                 return '/plugins/' + old['id']
         return None
 
-    @staticmethod
-    def env_parse(plugin):
-        env = dict(os.environ)
+    def env_parse(self, plugin):
         data = json.dumps(plugin)
-        for k, v in env.items():
+        for k, v in self.var_map.items():
             data = data.replace('${{{}}}'.format(k), v.replace("\n", "\\n"))
         return json.loads(data)
 

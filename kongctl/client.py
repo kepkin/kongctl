@@ -11,7 +11,7 @@ from .logger import LoggerConfig
 class HttpClient(object):
     logger_init_flag = False
 
-    _default_opts = {
+    default_opts = {
         "timeout": 5,
         "additional_time": 5,
         "verbose": False,
@@ -48,30 +48,6 @@ class HttpClient(object):
         elif self.super_verbose:
             return logger_config.get_super_verbose_logger()
         return logger_config.get_simple_logger()
-
-    @classmethod
-    def build_from_args(cls, args):
-        opts = dict()
-        opts.update(cls._default_opts)
-
-        if args.ctx:
-            ctx_path = os.path.expanduser(args.ctx)
-            if not (os.path.isfile(ctx_path) and os.path.exists(ctx_path)):
-                ctx_path = os.path.expanduser(os.path.join("~", ".kongctl", ctx_path))
-
-            opts.update(json.load(open(ctx_path)))
-
-        opts.update(vars(args))
-
-        return cls(**opts)
-
-    @staticmethod
-    def build_parser(parser):
-        parser.add_argument("-c", "--ctx", metavar="PATH", help="context file")
-        parser.add_argument("-s", "--server", metavar="url", default=argparse.SUPPRESS, help="Url to kong api")
-        parser.add_argument("--timeout", default=5, type=int, help="Timeout in seconds")
-        parser.add_argument("-v", dest="verbose", action='store_true', default=False, help="verbose mode")
-        parser.add_argument("-vv", dest="super_verbose", action='store_true', default=False, help="super verbose mode")
 
     def request(self, method, url, *args, **kwargs):
         self.logger.debug("Making {} call: {}".format(method, self.endpoint + url, args, kwargs))
