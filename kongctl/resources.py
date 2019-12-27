@@ -943,11 +943,10 @@ class EnsureResource(BaseResource):
                 return '/plugins/' + old['id']
         return None
 
-    def env_parse(self, plugin):
-        data = json.dumps(plugin)
+    def var_map_insert_config(self, config):
         for k, v in self.var_map.items():
-            data = data.replace('${{{}}}'.format(k), v.replace("\n", "\\n"))
-        return json.loads(data)
+            config = config.replace('${{{}}}'.format(k), str(v).replace('\n', '\\n'))
+        return config
 
     def plugin_update(self, plugins, url, args, non_parsed):
         plugin_res = PluginResource(self.http_client_factory, self.formatter_factory)
@@ -957,22 +956,21 @@ class EnsureResource(BaseResource):
 
         ident_list = list()
         old_list = list()
-        for i in range(len(plugins)):
-            plugins[i] = self.env_parse(plugins[i])
+        for new in plugins:
             try:
-                self.logger.info("Plugin: {}".format(plugins[i]['name']))
+                self.logger.info("Plugin: {}".format(new['name']))
             except KeyError:
                 raise KeyError("In plugin missing field \'name\'")
 
-            if plugins[i].get('route'):
-                plugins[i]['route']['id'] = self.id_plugin_route(plugins[i], args, non_parsed)
-                plugins[i]['route'].pop('name', None)
+            if new.get('route'):
+                new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
+                new['route'].pop('name', None)
 
             for old in current_plugins:
-                if old['name'] == plugins[i]['name'] not in old_list:
+                if old['name'] == new['name'] not in old_list:
                     old_list.append(old['name'])
                 cmp = yaml_res.del_config_attr('plugin', old)
-                if json.dumps(cmp, sort_keys=True) == json.dumps(plugins[i], sort_keys=True):
+                if json.dumps(cmp, sort_keys=True) == json.dumps(new, sort_keys=True):
                     ident_list.append(old['name'])
 
         for old in current_plugins:
@@ -1130,19 +1128,22 @@ class EnsureResource(BaseResource):
         for path in services:
             self.logger.info("Processing service: {}".format(path))
             f = open(path)
-            conf = yaml.safe_load(f.read())
+            parsed_config = self.var_map_insert_config(f.read())
+            conf = yaml.safe_load(parsed_config)
             self.service_required(conf, args, non_parsed)
 
         for path in plugins:
             self.logger.info("Processing plugins: {}".format(path))
             f = open(path)
-            conf = yaml.safe_load(f.read())
+            parsed_config = self.var_map_insert_config(f.read())
+            conf = yaml.safe_load(parsed_config)
             self.plugin_required(conf, args, non_parsed)
 
         for path in consumers:
             self.logger.info("Processing consumers: {}".format(path))
             f = open(path)
-            conf = yaml.safe_load(f.read())
+            parsed_config = self.var_map_insert_config(f.read())
+            conf = yaml.safe_load(parsed_config)
             self.consumer_required(conf, args, non_parsed)
 
     def build_parser(self, ensure):
