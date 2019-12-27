@@ -606,7 +606,10 @@ class YamlConfigResource(BaseResource):
     def isguid(route):
         guuid = "^(\{{0,1}([0-9a-fA-F]){8}-([0-9a-fA-F])" \
                 "{4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}\}{0,1})$"
-        return re.match(guuid, route)
+        if route:
+            return re.match(guuid, route)
+        else:
+            return False
 
     def get_config(self, data, args, non_parsed):
         route_res = RouteResource(self.http_client_factory, self.formatter_factory)
@@ -851,8 +854,9 @@ class YamlConfigResource(BaseResource):
 
 
 class EnsureResource(BaseResource):
-    def __init__(self, http_client, formatter):
+    def __init__(self, http_client, formatter, var_map):
         super().__init__(http_client, formatter, 'services')
+        self.var_map = var_map
 
     def id_plugin_route(self, plugin, args, non_parsed):
         if plugin['route']:
@@ -938,6 +942,11 @@ class EnsureResource(BaseResource):
             if old['name'] == plugin_name:
                 return '/plugins/' + old['id']
         return None
+
+    def var_map_insert_config(self, config):
+        for k, v in self.var_map.items():
+            config = config.replace('${{{}}}'.format(k), str(v).replace('\n', '\\n'))
+        return config
 
     def plugin_update(self, plugins, url, args, non_parsed):
         plugin_res = PluginResource(self.http_client_factory, self.formatter_factory)
@@ -1119,19 +1128,22 @@ class EnsureResource(BaseResource):
         for path in services:
             self.logger.info("Processing service: {}".format(path))
             f = open(path)
-            conf = yaml.safe_load(f.read())
+            parsed_config = self.var_map_insert_config(f.read())
+            conf = yaml.safe_load(parsed_config)
             self.service_required(conf, args, non_parsed)
 
         for path in plugins:
             self.logger.info("Processing plugins: {}".format(path))
             f = open(path)
-            conf = yaml.safe_load(f.read())
+            parsed_config = self.var_map_insert_config(f.read())
+            conf = yaml.safe_load(parsed_config)
             self.plugin_required(conf, args, non_parsed)
 
         for path in consumers:
             self.logger.info("Processing consumers: {}".format(path))
             f = open(path)
-            conf = yaml.safe_load(f.read())
+            parsed_config = self.var_map_insert_config(f.read())
+            conf = yaml.safe_load(parsed_config)
             self.consumer_required(conf, args, non_parsed)
 
     def build_parser(self, ensure):
