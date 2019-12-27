@@ -942,6 +942,14 @@ class EnsureResource(BaseResource):
                 return '/plugins/' + old['id']
         return None
 
+    @staticmethod
+    def env_parse(plugin):
+        env = dict(os.environ)
+        data = json.dumps(plugin)
+        for k, v in env.items():
+            data = data.replace('${{{}}}'.format(k), v.replace("\n", "\\n"))
+        return json.loads(data)
+
     def plugin_update(self, plugins, url, args, non_parsed):
         plugin_res = PluginResource(self.http_client_factory, self.formatter_factory)
         yaml_res = YamlConfigResource(self.http_client_factory, self.formatter_factory)
@@ -950,21 +958,22 @@ class EnsureResource(BaseResource):
 
         ident_list = list()
         old_list = list()
-        for new in plugins:
+        for i in range(len(plugins)):
+            plugins[i] = self.env_parse(plugins[i])
             try:
-                self.logger.info("Plugin: {}".format(new['name']))
+                self.logger.info("Plugin: {}".format(plugins[i]['name']))
             except KeyError:
                 raise KeyError("In plugin missing field \'name\'")
 
-            if new.get('route'):
-                new['route']['id'] = self.id_plugin_route(new, args, non_parsed)
-                new['route'].pop('name', None)
+            if plugins[i].get('route'):
+                plugins[i]['route']['id'] = self.id_plugin_route(plugins[i], args, non_parsed)
+                plugins[i]['route'].pop('name', None)
 
             for old in current_plugins:
-                if old['name'] == new['name'] not in old_list:
+                if old['name'] == plugins[i]['name'] not in old_list:
                     old_list.append(old['name'])
                 cmp = yaml_res.del_config_attr('plugin', old)
-                if json.dumps(cmp, sort_keys=True) == json.dumps(new, sort_keys=True):
+                if json.dumps(cmp, sort_keys=True) == json.dumps(plugins[i], sort_keys=True):
                     ident_list.append(old['name'])
 
         for old in current_plugins:
