@@ -945,7 +945,8 @@ class EnsureResource(BaseResource):
 
     def var_map_insert_config(self, config):
         for k, v in self.var_map.items():
-            config = config.replace('${{{}}}'.format(k), str(v).replace('\n', '\\n'))
+            vv = json.dumps(v)
+            config = config.replace('${{{}}}'.format(k), vv)
         return config
 
     def plugin_update(self, plugins, url, args, non_parsed):
