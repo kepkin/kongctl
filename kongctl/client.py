@@ -65,14 +65,15 @@ class HttpClient(object):
         json_body = None
         try:
             json_body = res.json()
-        except Exception:
-            pass
+        except Exception as e:
+            raise RuntimeError("Failed to decode json on request {} {} ({}): {}".format(method, url, res.status_code, res.text)) from e
+
 
         if self.super_verbose:
             self.logger.debug('Recieved {}:\n{}'.format(res.status_code, json_body))
 
         if res.status_code not in {200, 201, 204}:
-            raise RuntimeError("Recieved {}: {}".format(res.status_code, res.json()))
+            raise RuntimeError("Recieved {}: {}".format(res.status_code, json_body))
 
         return res
 

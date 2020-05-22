@@ -104,6 +104,11 @@ def main():
 
         except KeyboardInterrupt:
             sys.exit(0)
+
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
     except Exception as e:
         raise
         logging.getLogger('__name__').fatal(e)
