@@ -1,15 +1,23 @@
-import argparse
-import json
-import os.path
-import requests
 import logging
 import logging.config
-import yaml
+
+import requests
+
 from .logger import LoggerConfig
 
 
 class HttpClient(object):
     logger_init_flag = False
+    success_codes = {
+        200,
+        201,
+        204,
+    }
+    skip_decode_codes = {
+        204,
+        502,
+        503,
+    }
 
     default_opts = {
         "timeout": 5,
@@ -62,18 +70,19 @@ class HttpClient(object):
             kwargs['timeout'] += self.additional_time
             res = self.session.request(method, self.endpoint + url, *args, **kwargs)
 
-        json_body = None
-        try:
-            json_body = res.json()
-        except Exception as e:
-            raise RuntimeError("Failed to decode json on request {} {} ({}): {}".format(method, url, res.status_code, res.text)) from e
+        response_content = res.text
 
+        if res.status_code not in self.skip_decode_codes:
+            try:
+                response_content = res.json()
+            except Exception as e:
+                raise RuntimeError("Failed to decode json on request {} {} ({}): {}".format(method, url, res.status_code, res.text)) from e
 
         if self.super_verbose:
-            self.logger.debug('Recieved {}:\n{}'.format(res.status_code, json_body))
+            self.logger.debug('Received {}:\n{}'.format(res.status_code, response_content))
 
-        if res.status_code not in {200, 201, 204}:
-            raise RuntimeError("Recieved {}: {}".format(res.status_code, json_body))
+        if res.status_code not in self.success_codes:
+            raise RuntimeError("Received {}: {}".format(res.status_code, response_content))
 
         return res
 
