@@ -21,6 +21,7 @@ PACKAGES = [
     ('idna', 'https://pypi.org/pypi/{}/json'),
     ('chardet', 'https://pypi.org/pypi/{}/json'),
     ('PySocks', 'https://pypi.org/pypi/{}/json'),
+    ('PyYAML', 'https://pypi.org/pypi/{}/json'),
 ]
 
 
