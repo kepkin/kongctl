@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-kongcl - a CLI for kong admin interface.
+kongctl - a CLI for kong admin interface.
 """
-__version__ = '0.3.3'
+__version__ = '0.3.4'
 __author__ = 'Alexander Nevskiy'
 __licence__ = 'BSD'

@@ -2,3 +2,4 @@ docutils
 wheel
 pycodestyle
 PyYAML
+twine
