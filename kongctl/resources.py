@@ -1153,7 +1153,7 @@ class EnsureResource(BaseResource):
 
 
 class SnapshotsResource(BaseResource):
-    def __init__(self, http_client, formatter, var_map):
+    def __init__(self, http_client, formatter):
         super().__init__(http_client, formatter, 'snapshot')
 
     def make_snapshot(self, args, non_parsed, services):

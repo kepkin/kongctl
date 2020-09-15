@@ -89,7 +89,7 @@ def main():
         sb_delete = delete.add_subparsers()
         sb_config = config.add_subparsers()
 
-        SnapshotsResource(get_http_client, get_formatter, app_config.get('var_map', {})).build_parser(snapshot)
+        SnapshotsResource(get_http_client, get_formatter).build_parser(snapshot)
         EnsureResource(get_http_client, get_formatter, app_config.get('var_map', {})).build_parser(ensure)
         YamlConfigResource(get_http_client, get_formatter).build_parser(sb_config)
         ServiceResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
