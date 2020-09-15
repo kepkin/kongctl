@@ -113,8 +113,8 @@ def main():
             sys.exit(1)
 
     except Exception as e:
+        logging.getLogger(__name__).fatal(e)
         raise
-        logging.getLogger('__name__').fatal(e)
 
 
 if __name__ == '__main__':
