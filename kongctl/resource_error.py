@@ -53,3 +53,11 @@ class EnsureServiceError(Exception):
 
     def __str__(self):
         return "Service missing field: {}".format(self.data_e)
+
+
+class SnapshotConfigMissingFieldError(Exception):
+    def __init__(self, e):
+        self.data_e = e
+
+    def __str__(self):
+        return "Field {} not present in config file".format(self.data_e)

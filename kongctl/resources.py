@@ -1163,7 +1163,10 @@ class SnapshotsResource(BaseResource):
         }
 
         for service in services:
-            args.service = service['name']
+            try:
+                args.service = service['name']
+            except KeyError as e:
+                raise SnapshotConfigMissingFieldError(e)
 
             current_service = yaml_config_resource.get_service(args, non_parsed)
 
@@ -1174,18 +1177,22 @@ class SnapshotsResource(BaseResource):
 
     def save_snapshot(self, args, non_parsed, snapshot):
         if args.file is not None:
-            f = open(args.file, 'w')
-            YamlOutputFormatter(f).print_obj(snapshot)
+            with open(args.file, 'w') as f:
+                YamlOutputFormatter(f).print_obj(snapshot)
         else:
             self.formatter.print_obj(snapshot)
 
     def snapshot_handler(self, args, non_parsed):
-        f = open(args.path)
-        conf = yaml.safe_load(f.read())
-        services = conf['services']
+        with open(args.path) as f:
+            conf = yaml.safe_load(f.read())
 
-        snapshot = self.make_snapshot(args, non_parsed, services)
-        self.save_snapshot(args, non_parsed, snapshot)
+            try:
+                services = conf['services']
+            except KeyError as e:
+                raise SnapshotConfigMissingFieldError(e)
+
+            snapshot = self.make_snapshot(args, non_parsed, services)
+            self.save_snapshot(args, non_parsed, snapshot)
 
     def build_parser(self, snapshot):
         snapshot.set_defaults(func=self.snapshot_handler)
