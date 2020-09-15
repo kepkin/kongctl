@@ -391,9 +391,9 @@ class PluginSchemaResource(BaseResource):
         raise NotImplemented()
 
     def _list(self, args, non_parsed):
-        print("qq"*20)
+        print("qq" * 20)
         r = self.http_client.get(self.build_resource_url('list', args, non_parsed))
-        print("qq"*20)
+        print("qq" * 20)
         data = r.json()
 
         for resource in data['enabled_plugins']:
@@ -1150,3 +1150,44 @@ class EnsureResource(BaseResource):
     def build_parser(self, ensure):
         ensure.set_defaults(func=self.get_yaml_file)
         ensure.add_argument('path', help='directory or yaml config file')
+
+
+class SnapshotsResource(BaseResource):
+    def __init__(self, http_client, formatter, var_map):
+        super().__init__(http_client, formatter, 'snapshot')
+
+    def make_snapshot(self, args, non_parsed, services):
+        yaml_config_resource = YamlConfigResource(self.http_client_factory, self.formatter_factory)
+        snapshot = {
+            'services': []
+        }
+
+        for service in services:
+            args.service = service['name']
+
+            current_service = yaml_config_resource.get_service(args, non_parsed)
+
+            # Берем 0 элемент т.к. get_service возвращает только один сервис
+            snapshot['services'].append(current_service['services'][0])
+
+        return snapshot
+
+    def save_snapshot(self, args, non_parsed, snapshot):
+        if args.file is not None:
+            f = open(args.file, 'w')
+            YamlOutputFormatter(f).print_obj(snapshot)
+        else:
+            self.formatter.print_obj(snapshot)
+
+    def snapshot_handler(self, args, non_parsed):
+        f = open(args.path)
+        conf = yaml.safe_load(f.read())
+        services = conf['services']
+
+        snapshot = self.make_snapshot(args, non_parsed, services)
+        self.save_snapshot(args, non_parsed, snapshot)
+
+    def build_parser(self, snapshot):
+        snapshot.set_defaults(func=self.snapshot_handler)
+        snapshot.add_argument('path', help='directory or yaml config file')
+        snapshot.add_argument('-f', '--file', help='the file where the payment will be saved')
