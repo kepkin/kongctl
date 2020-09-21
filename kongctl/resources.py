@@ -4,6 +4,8 @@ import collections
 import os
 import yaml
 import re
+import uuid
+
 from .yaml_formatter import YamlOutputFormatter
 from operator import itemgetter
 from urllib.parse import urlparse
@@ -603,12 +605,11 @@ class YamlConfigResource(BaseResource):
         return "{}-{}".format(plugin['name'], route_name)
 
     @staticmethod
-    def isguid(route):
-        guuid = "^(\{{0,1}([0-9a-fA-F]){8}-([0-9a-fA-F])" \
-                "{4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}\}{0,1})$"
-        if route:
-            return re.match(guuid, route)
-        else:
+    def is_valid_uuid(val):
+        try:
+            uuid.UUID(str(val))
+            return True
+        except ValueError:
             return False
 
     def get_config(self, data, args, non_parsed):
@@ -632,7 +633,7 @@ class YamlConfigResource(BaseResource):
             route = self.del_config_attr('route', route)
             if 'name' not in route:
                 route['name'] = n['id']
-            if self.isguid(route['name']):
+            if self.is_valid_uuid(route['name']):
                 route['name'] += '_route'
             self.logger.info('Route: {}'.format(route['name']))
             service['routes'].append(route)
@@ -655,7 +656,7 @@ class YamlConfigResource(BaseResource):
                 route = route_res._get(args, non_parsed)
 
                 plugin['route']['name'] = route.get('name', route['id'])
-                if self.isguid(plugin['route']['name']):
+                if self.is_valid_uuid(plugin['route']['name']):
                     plugin['route']['name'] += '_route'
 
             plugin['protocols'] = n.get('protocols')
