@@ -63,6 +63,7 @@ def main():
                                description='Add the service of its paths and plugins or plugins not have services and '
                                            'routes or consumers and their key-auth from the configuration file to the '
                                            'Kong server.')
+        snapshot = sb.add_parser('snapshot', help='Snapshot all services from config .yaml file')
 
         args, _ = parser.parse_known_args()
         app_config = build_app_config(args)
@@ -88,12 +89,14 @@ def main():
         sb_delete = delete.add_subparsers()
         sb_config = config.add_subparsers()
 
+        SnapshotsResource(get_http_client, get_formatter).build_parser(snapshot)
         EnsureResource(get_http_client, get_formatter, app_config.get('var_map', {})).build_parser(ensure)
         YamlConfigResource(get_http_client, get_formatter).build_parser(sb_config)
         ServiceResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
         RouteResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
         PluginResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
-        PluginSchemaResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
+        PluginSchemaResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update,
+                                                                          sb_delete)
         ConsumerResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
         KeyAuthResource(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
         JwtSecrets(get_http_client, get_formatter).build_parser(sb_list, sb_get, sb_create, sb_update, sb_delete)
@@ -110,8 +113,8 @@ def main():
             sys.exit(1)
 
     except Exception as e:
+        logging.getLogger(__name__).fatal(e)
         raise
-        logging.getLogger('__name__').fatal(e)
 
 
 if __name__ == '__main__':

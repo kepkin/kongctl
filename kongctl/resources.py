@@ -4,6 +4,8 @@ import collections
 import os
 import yaml
 import re
+import uuid
+
 from .yaml_formatter import YamlOutputFormatter
 from operator import itemgetter
 from urllib.parse import urlparse
@@ -391,9 +393,9 @@ class PluginSchemaResource(BaseResource):
         raise NotImplemented()
 
     def _list(self, args, non_parsed):
-        print("qq"*20)
+        print("qq" * 20)
         r = self.http_client.get(self.build_resource_url('list', args, non_parsed))
-        print("qq"*20)
+        print("qq" * 20)
         data = r.json()
 
         for resource in data['enabled_plugins']:
@@ -603,12 +605,11 @@ class YamlConfigResource(BaseResource):
         return "{}-{}".format(plugin['name'], route_name)
 
     @staticmethod
-    def isguid(route):
-        guuid = "^(\{{0,1}([0-9a-fA-F]){8}-([0-9a-fA-F])" \
-                "{4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}\}{0,1})$"
-        if route:
-            return re.match(guuid, route)
-        else:
+    def is_valid_uuid(val):
+        try:
+            uuid.UUID(str(val))
+            return True
+        except ValueError:
             return False
 
     def get_config(self, data, args, non_parsed):
@@ -632,7 +633,7 @@ class YamlConfigResource(BaseResource):
             route = self.del_config_attr('route', route)
             if 'name' not in route:
                 route['name'] = n['id']
-            if self.isguid(route['name']):
+            if self.is_valid_uuid(route['name']):
                 route['name'] += '_route'
             self.logger.info('Route: {}'.format(route['name']))
             service['routes'].append(route)
@@ -655,7 +656,7 @@ class YamlConfigResource(BaseResource):
                 route = route_res._get(args, non_parsed)
 
                 plugin['route']['name'] = route.get('name', route['id'])
-                if self.isguid(plugin['route']['name']):
+                if self.is_valid_uuid(plugin['route']['name']):
                     plugin['route']['name'] += '_route'
 
             plugin['protocols'] = n.get('protocols')
@@ -1150,3 +1151,51 @@ class EnsureResource(BaseResource):
     def build_parser(self, ensure):
         ensure.set_defaults(func=self.get_yaml_file)
         ensure.add_argument('path', help='directory or yaml config file')
+
+
+class SnapshotsResource(BaseResource):
+    def __init__(self, http_client, formatter):
+        super().__init__(http_client, formatter, 'snapshot')
+
+    def make_snapshot(self, args, non_parsed, services):
+        yaml_config_resource = YamlConfigResource(self.http_client_factory, self.formatter_factory)
+        snapshot = {
+            'services': []
+        }
+
+        for service in services:
+            try:
+                args.service = service['name']
+            except KeyError as e:
+                raise SnapshotConfigMissingFieldError(e)
+
+            current_service = yaml_config_resource.get_service(args, non_parsed)
+
+            # Берем 0 элемент т.к. get_service возвращает только один сервис
+            snapshot['services'].append(current_service['services'][0])
+
+        return snapshot
+
+    def save_snapshot(self, args, non_parsed, snapshot):
+        if args.file is not None:
+            with open(args.file, 'w') as f:
+                YamlOutputFormatter(f).print_obj(snapshot)
+        else:
+            self.formatter.print_obj(snapshot)
+
+    def snapshot_handler(self, args, non_parsed):
+        with open(args.path) as f:
+            conf = yaml.safe_load(f.read())
+
+            try:
+                services = conf['services']
+            except KeyError as e:
+                raise SnapshotConfigMissingFieldError(e)
+
+            snapshot = self.make_snapshot(args, non_parsed, services)
+            self.save_snapshot(args, non_parsed, snapshot)
+
+    def build_parser(self, snapshot):
+        snapshot.set_defaults(func=self.snapshot_handler)
+        snapshot.add_argument('path', help='directory or yaml config file')
+        snapshot.add_argument('-f', '--file', help='the file where the payment will be saved')
