@@ -1090,6 +1090,7 @@ class EnsureResource(BaseResource):
 
     def get_yaml_file(self, args, non_parsed):
         self.logger.info("Process the file or directory")
+
         services = []
         plugins = []
         consumers = []
@@ -1128,8 +1129,11 @@ class EnsureResource(BaseResource):
                 services.append(args.path)
 
         for path in services:
-            self.logger.info("Processing service: {}".format(path))
-            f = open(path)
+            self.logger.info("Processing service: {}".format("stdin" if path is "-" else path))
+            if path is "-":
+                f = sys.stdin
+            else:
+                f = open(path)
             parsed_config = self.var_map_insert_config(f.read())
             conf = yaml.safe_load(parsed_config)
             self.service_required(conf, args, non_parsed)
@@ -1150,7 +1154,7 @@ class EnsureResource(BaseResource):
 
     def build_parser(self, ensure):
         ensure.set_defaults(func=self.get_yaml_file)
-        ensure.add_argument('path', help='directory or yaml config file')
+        ensure.add_argument('path', help='directory or yaml config file if path == - then read config from stdin')
 
 
 class SnapshotsResource(BaseResource):
