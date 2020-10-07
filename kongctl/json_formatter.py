@@ -29,6 +29,8 @@ class JsonOutputFormatter(object):
             self.print_list(data, indent)
         elif isinstance(data, bool):
             self._write('true' if data else 'false')
+        elif data is None:
+            self._write('null')
         else:
             self._write('{}'.format(data))
 
