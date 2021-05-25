@@ -772,10 +772,7 @@ class YamlConfigResource(BaseResource):
             'services': [],
         }
         for service in service_list:
-            try:
-                args.service = service['name']
-            except KeyError as e:
-                raise SnapshotConfigMissingFieldError(e)
+            args.service = service['name']
 
             current_service = yaml_config_resource.get_service(args, non_parsed)
 
