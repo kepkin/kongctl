@@ -903,7 +903,26 @@ class EnsureResource(BaseResource):
 
         raise RuntimeError("Can't find such route {}".format(plugin['route']['name']))
 
-    def service_update(self, data, args, non_parsed):
+    def remove_missing_services_from_service_group(self, service_group, services, args, non_parsed):
+        if service_group is None:
+            return
+
+        service_res = ServiceResource(self.http_client_factory, self.formatter_factory)
+
+        service_list = service_res.list_by_group(service_group, args, non_parsed)
+
+        service_names = [service['name'] for service in services]
+        for service in service_list:
+            if service['name'] not in service_names:
+                self.logger.info(
+                    "Recursive delete service {} from service_group {}".format(service['name'], service_group))
+
+                args.service = service['name']
+                service_res.recursive_delete(args, non_parsed)
+
+        return
+
+    def service_update(self, service_group, data, args, non_parsed):
         self.logger.info("Create or patch service: {}".format(data['name']))
         service_res = ServiceResource(self.http_client_factory, self.formatter_factory)
 
@@ -924,8 +943,8 @@ class EnsureResource(BaseResource):
 
                 service = dict()
                 current_tags = current_service['tags'] if current_service['tags'] else [None]
-                if data['service_group'] not in current_tags:
-                    service['tags'] = data['service_group'] if data['service_group'] else ''
+                if service_group not in current_tags:
+                    service['tags'] = service_group if service_group else ''
                 elif old_url == data['url']:
                     return url
 
@@ -940,6 +959,7 @@ class EnsureResource(BaseResource):
                 self.http_client.patch(url, data=service)
                 return url
 
+        data['tags'] = service_group if service_group else ''
         self.http_client.post(url, data=data)
         return url + '/' + service_res.id_getter(data['name'])
 
@@ -1036,18 +1056,21 @@ class EnsureResource(BaseResource):
     def service_required(self, conf, args, non_parsed):
         service_group = conf.get('service_group', None)
 
+        self.remove_missing_services_from_service_group(service_group, conf['services'], args, non_parsed)
+
         for service in conf['services']:
             routes = service['routes']
             plugins = service['plugins']
 
-            data = {'service_group': service_group}
             try:
-                data['name'] = service['name']
-                data['url'] = service['url']
+                data = {
+                    'name': service['name'],
+                    'url': service['url'],
+                }
             except Exception as e:
                 raise EnsureServiceError(e)
 
-            url = self.service_update(data, args, non_parsed)
+            url = self.service_update(service_group, data, args, non_parsed)
             self.route_update(routes, args, non_parsed)
             self.plugin_update(plugins, url + '/plugins', args, non_parsed)
 
