@@ -94,13 +94,11 @@ class BaseResource(object):
         data = sys.stdin.read()
         return json.loads(data)
 
-    def build_resource_url(self, op, args=None, non_parsed=None, id_=None, service_group=None):
+    def build_resource_url(self, op, args=None, non_parsed=None, id_=None):
         if op == 'get_by_id':
             return '/{}/{}/'.format(self.resource_name, id_)
         elif op == 'list':
             return '/{}'.format(self.resource_name)
-        elif op == 'list_by_service_group':
-            return '/{}?tags={}'.format(self.resource_name, service_group)
         elif op in {'get', 'update', 'delete'}:
             return '/{}/{}'.format(self.resource_name, self.id_getter(getattr(args, self.resource_name[:-1])))
         elif op in {'create'}:
@@ -121,8 +119,10 @@ class BaseResource(object):
                     self.cache[resource['id']] = resource
                 yield resource
 
-    def list(self, args, non_parsed):
-        for resource in self._list(args, non_parsed):
+    def list(self, args, non_parsed, **kwargs):
+        list_ = kwargs.get('list', self._list(args, non_parsed))
+
+        for resource in list_:
             if args.list_full:
                 self.formatter.print_obj(resource)
                 self.formatter.println()
@@ -200,9 +200,18 @@ class ServiceResource(BaseResource):
     def __init__(self, http_client, formatter):
         super().__init__(http_client, formatter, 'services')
 
-    def list_by_group(self, group_name, args, non_parsed):
-        next_url = self.build_resource_url('list_by_service_group', args, non_parsed, service_group=group_name)
-        return self._list(args, non_parsed, next_url=next_url)
+    def build_resource_url(self, op, args, non_parsed, **kwargs):
+        if op in {'list'} and args and args.tag is not None:
+            return '/{}?tags={}'.format(self.resource_name, args.tag)
+        else:
+            return super().build_resource_url(op, args, non_parsed, **kwargs)
+
+    def _list(self, args, non_parsed, **kwargs):
+        next_url = self.build_resource_url('list', args, non_parsed)
+        return super()._list(args, non_parsed, next_url=next_url)
+
+    def list(self, args, non_parsed, **kwargs):
+        return super().list(args, non_parsed, list=self._list(args, non_parsed))
 
     def short_formatter(self, resource):
         self.formatter.print_pair(resource['id'], resource['name'])
@@ -216,6 +225,7 @@ class ServiceResource(BaseResource):
     def build_parser(self, sb_list, sb_get, sb_create, sb_update, sb_delete):
         list_ = sb_list.add_parser(self.resource_name)
         list_.set_defaults(func=self.list)
+        list_.add_argument("-t", "--tag", help="List services where exist this tag")
 
         get = sb_get.add_parser(self.resource_name[:-1])
         get.set_defaults(func=self.get)
@@ -762,10 +772,11 @@ class YamlConfigResource(BaseResource):
         self.formatter.print_obj(conf_service)
 
     def yaml_service_group(self, args, non_parsed):
-        yaml_config_resource = YamlConfigResource(self.http_client_factory, self.formatter_factory)
         service_res = ServiceResource(self.http_client_factory, self.formatter_factory)
 
-        service_list = service_res.list_by_group(args.group_name, args, non_parsed)
+        args.tag = args.group_name
+
+        service_list = service_res._list(args, non_parsed)
 
         config = {
             'service_group': args.group_name,
@@ -774,11 +785,12 @@ class YamlConfigResource(BaseResource):
         for service in service_list:
             args.service = service['name']
 
-            current_service = yaml_config_resource.get_service(args, non_parsed)
+            current_service = self.get_service(args, non_parsed)
 
             # Берем 0 элемент т.к. get_service возвращает только один сервис
             config['services'].append(current_service['services'][0])
 
+        self._header()
         self.formatter.print_obj(config)
 
     def yaml_plugin(self, args, non_parsed):
@@ -909,7 +921,9 @@ class EnsureResource(BaseResource):
 
         service_res = ServiceResource(self.http_client_factory, self.formatter_factory)
 
-        service_list = service_res.list_by_group(service_group, args, non_parsed)
+        args.tag = service_group
+
+        service_list = service_res._list(args, non_parsed)
 
         service_names = [service['name'] for service in services]
         for service in service_list:
@@ -928,7 +942,7 @@ class EnsureResource(BaseResource):
 
         args.service = data['name']
 
-        url = service_res.build_resource_url('create')
+        url = service_res.build_resource_url('create', args, non_parsed)
         try:
             current_service = service_res._get(args, non_parsed)
         except GetError:
