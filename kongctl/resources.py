@@ -104,8 +104,11 @@ class BaseResource(object):
         elif op in {'create'}:
             return '/{}'.format(self.resource_name)
 
-    def _list(self, args, non_parsed):
-        next_url = self.build_resource_url('list', args, non_parsed)
+    def _list(self, args, non_parsed, **kwargs):
+        next_url = kwargs.get('next_url', None)
+        if next_url is None:
+            next_url = self.build_resource_url('list', args, non_parsed)
+
         while next_url:
             r = self.http_client.get(next_url)
             data = r.json()
@@ -116,8 +119,10 @@ class BaseResource(object):
                     self.cache[resource['id']] = resource
                 yield resource
 
-    def list(self, args, non_parsed):
-        for resource in self._list(args, non_parsed):
+    def list(self, args, non_parsed, **kwargs):
+        list_ = kwargs.get('list', self._list(args, non_parsed))
+
+        for resource in list_:
             if args.list_full:
                 self.formatter.print_obj(resource)
                 self.formatter.println()
@@ -195,6 +200,19 @@ class ServiceResource(BaseResource):
     def __init__(self, http_client, formatter):
         super().__init__(http_client, formatter, 'services')
 
+    def build_resource_url(self, op, args, non_parsed, **kwargs):
+        if op in {'list'} and args and args.tag is not None:
+            return '/{}?tags={}'.format(self.resource_name, args.tag)
+        else:
+            return super().build_resource_url(op, args, non_parsed, **kwargs)
+
+    def _list(self, args, non_parsed, **kwargs):
+        next_url = self.build_resource_url('list', args, non_parsed)
+        return super()._list(args, non_parsed, next_url=next_url)
+
+    def list(self, args, non_parsed, **kwargs):
+        return super().list(args, non_parsed, list=self._list(args, non_parsed))
+
     def short_formatter(self, resource):
         self.formatter.print_pair(resource['id'], resource['name'])
         self.formatter.println("{}{}".format(resource['host'], resource['path'] or ''), indent=1)
@@ -207,6 +225,7 @@ class ServiceResource(BaseResource):
     def build_parser(self, sb_list, sb_get, sb_create, sb_update, sb_delete):
         list_ = sb_list.add_parser(self.resource_name)
         list_.set_defaults(func=self.list)
+        list_.add_argument("-t", "--tag", help="List services where exist this tag")
 
         get = sb_get.add_parser(self.resource_name[:-1])
         get.set_defaults(func=self.get)
@@ -752,6 +771,28 @@ class YamlConfigResource(BaseResource):
         self._header()
         self.formatter.print_obj(conf_service)
 
+    def yaml_service_group(self, args, non_parsed):
+        service_res = ServiceResource(self.http_client_factory, self.formatter_factory)
+
+        args.tag = args.group_name
+
+        service_list = service_res._list(args, non_parsed)
+
+        config = {
+            'service_group': args.group_name,
+            'services': [],
+        }
+        for service in service_list:
+            args.service = service['name']
+
+            current_service = self.get_service(args, non_parsed)
+
+            # Берем 0 элемент т.к. get_service возвращает только один сервис
+            config['services'].append(current_service['services'][0])
+
+        self._header()
+        self.formatter.print_obj(config)
+
     def yaml_plugin(self, args, non_parsed):
         self.logger.debug("Print output plugins.yaml file")
         self.formatter.print_obj(self.get_plugin(args, non_parsed))
@@ -815,6 +856,12 @@ class YamlConfigResource(BaseResource):
         service_config.set_defaults(func=self.yaml_service)
         service_config.add_argument("service", help='service id {username or id}')
 
+        service_group_config = sb_config.add_parser('serviceGroup',
+                                                    description='Service its routes and plugins print config file in '
+                                                                'stdout by group name.')
+        service_group_config.set_defaults(func=self.yaml_service_group)
+        service_group_config.add_argument("group_name", default=None, nargs='?', help='service group name')
+
         consumer_config = sb_config.add_parser('consumer',
                                                description='Consumers and their key-auth print config file in stdout.')
         consumer_config.set_defaults(func=self.yaml_consumer)
@@ -868,13 +915,34 @@ class EnsureResource(BaseResource):
 
         raise RuntimeError("Can't find such route {}".format(plugin['route']['name']))
 
-    def service_update(self, data, args, non_parsed):
+    def remove_missing_services_from_service_group(self, service_group, services, args, non_parsed):
+        if service_group is None:
+            return
+
+        service_res = ServiceResource(self.http_client_factory, self.formatter_factory)
+
+        args.tag = service_group
+
+        service_list = service_res._list(args, non_parsed)
+
+        service_names = [service['name'] for service in services]
+        for service in service_list:
+            if service['name'] not in service_names:
+                self.logger.info(
+                    "Recursive delete service {} from service_group {}".format(service['name'], service_group))
+
+                args.service = service['name']
+                service_res.recursive_delete(args, non_parsed)
+
+        return
+
+    def service_update(self, service_group, data, args, non_parsed):
         self.logger.info("Create or patch service: {}".format(data['name']))
         service_res = ServiceResource(self.http_client_factory, self.formatter_factory)
 
         args.service = data['name']
 
-        url = service_res.build_resource_url('create')
+        url = service_res.build_resource_url('create', args, non_parsed)
         try:
             current_service = service_res._get(args, non_parsed)
         except GetError:
@@ -886,11 +954,15 @@ class EnsureResource(BaseResource):
 
                 old_url = "{protocol}://{host}:{port}".format(**current_service)
                 old_url += str(current_service['path']) if current_service['path'] is not None else ''
-                if old_url == data['url']:
+
+                service = dict()
+                current_tags = current_service['tags'] if current_service['tags'] else [None]
+                if service_group not in current_tags:
+                    service['tags'] = service_group if service_group else ''
+                elif old_url == data['url']:
                     return url
 
                 u = urlparse(data['url'])
-                service = dict()
 
                 service['name'] = data['name']
                 service['protocol'] = u.scheme
@@ -901,6 +973,7 @@ class EnsureResource(BaseResource):
                 self.http_client.patch(url, data=service)
                 return url
 
+        data['tags'] = service_group if service_group else ''
         self.http_client.post(url, data=data)
         return url + '/' + service_res.id_getter(data['name'])
 
@@ -995,18 +1068,23 @@ class EnsureResource(BaseResource):
                 self.http_client.post(url, json=new)
 
     def service_required(self, conf, args, non_parsed):
+        service_group = conf.get('service_group', None)
+
+        self.remove_missing_services_from_service_group(service_group, conf['services'], args, non_parsed)
+
         for service in conf['services']:
             routes = service['routes']
             plugins = service['plugins']
 
-            data = dict()
             try:
-                data['name'] = service['name']
-                data['url'] = service['url']
+                data = {
+                    'name': service['name'],
+                    'url': service['url'],
+                }
             except Exception as e:
                 raise EnsureServiceError(e)
 
-            url = self.service_update(data, args, non_parsed)
+            url = self.service_update(service_group, data, args, non_parsed)
             self.route_update(routes, args, non_parsed)
             self.plugin_update(plugins, url + '/plugins', args, non_parsed)
 
